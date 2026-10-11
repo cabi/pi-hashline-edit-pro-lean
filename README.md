@@ -35,7 +35,20 @@ Measured on the real registered definitions (default config) with the same rende
 
 ## Use
 
-Install alongside `@earendil-works/pi-coding-agent` and enable this extension instead of (or — not recommended — in addition to) upstream's:
+Install as a pi package from git:
+
+```bash
+# personal install → ~/.pi/agent/settings.json
+pi install git:github.com/cabi/pi-hashline-edit-pro-lean
+
+# project install → .pi/settings.json (loaded after project trust)
+pi install --local git:github.com/cabi/pi-hashline-edit-pro-lean
+
+# try once without persisting
+pi -e git:github.com/cabi/pi-hashline-edit-pro-lean
+```
+
+Alternatively, install alongside `@earendil-works/pi-coding-agent` and enable this extension instead of (or — not recommended — in addition to) upstream's:
 
 ```json
 { "pi": { "extensions": ["./node_modules/pi-hashline-edit-pro-lean/src/index.ts"] } }
