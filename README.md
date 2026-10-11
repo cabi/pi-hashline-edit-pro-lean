@@ -27,11 +27,11 @@ Measured on the real registered definitions (default config) with the same rende
 
 | | upstream 6.3.1 | lean | saved |
 |---|---|---|---|
-| active tools | 8 | 3 | |
-| declarations | 2137 tokens | 1136 tokens | |
-| snippets | 75 tokens | 75 tokens | |
-| guidelines | 22 rules / 879 tokens | 9 rules / 403 tokens | |
-| **total per request** | **3282 tokens** | **1614 tokens** | **1668 (50.8%)** |
+| active tools | 8 | 3 | 5 (62.5%) |
+| declarations | 2137 tokens | 1136 tokens | 1001 tokens (46.8%) |
+| snippets | 75 tokens | 75 tokens | 0 |
+| guidelines | 22 rules / 879 tokens | 9 rules / 403 tokens | 13 rules / 476 tokens (54.2%) |
+| **total per request** | **3282 tokens** | **1614 tokens** | **1668 tokens (50.8%)** |
 
 ## Use
 
