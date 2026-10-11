@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Token-lean wrapper around pi-hashline-edit-pro: identical features, trimmed tool descriptions and schemas. Upstream is a pinned dependency, wrapped via Proxy.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/cabi/pi-hashline-edit-pro-lean.git"
+  },
   "type": "module",
   "private": true,
   "main": "src/index.ts",
