@@ -15,9 +15,14 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import { encodingForModel } from "js-tiktoken";
 import upstream from "pi-hashline-edit-pro";
 import lean from "../src/index.ts";
+
+const upstreamVersion = createRequire(import.meta.url)(
+  "pi-hashline-edit-pro/package.json",
+).version as string;
 import { Harness, makeCtx } from "../test/harness.ts";
 
 const enc = encodingForModel("gpt-4o");
@@ -84,7 +89,7 @@ const saved = up.totalTokens - ln.totalTokens;
 rows.push(["saved per request", "", `${saved} tokens (${((saved / up.totalTokens) * 100).toFixed(1)}%)`]);
 
 const width = [26, 58, 58];
-console.log(`${"upstream " + "pi-hashline-edit-pro@6.3.1"} vs lean (default config, js-tiktoken o200k_base)\n`);
+console.log(`upstream pi-hashline-edit-pro@${upstreamVersion} vs lean (default config, js-tiktoken o200k_base)\n`);
 for (const row of rows) {
   console.log(row.map((cell, i) => String(cell).padEnd(width[i])).join("|"));
   if (row[0].startsWith("TOTAL")) console.log("-".repeat(width.reduce((a, b) => a + b + 2, 0)));

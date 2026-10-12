@@ -67,7 +67,7 @@ describe("registration and frozen tool list", () => {
   it("registers exactly the lean trio; upstream tools are captured, not registered", async () => {
     const harness = await setup();
     assert.deepEqual([...harness.tools.keys()].sort(), ["hashline", "read", "replace"]);
-    for (const name of ["insert", "copy", "move", "replace_match", "anchor_grep", "undo_last_change"]) {
+    for (const name of ["insert", "copy", "move", "replace_match", "grep", "undo_last_change"]) {
       assert.ok(!harness.tools.has(name), `upstream tool ${name} must not be registered directly`);
     }
     // upstream's commands and handlers still pass through
@@ -136,6 +136,14 @@ describe("registration and frozen tool list", () => {
     assert.ok(!/│/.test(readText), "vanilla read has no anchor separator");
     assert.ok(readText.includes("hello gate"));
 
+    // gated models keep a plain grep under the same name; the op forwards
+    const grepGated = await harness.callTool(
+      "hashline",
+      { op: "grep", pattern: "gate", path: cwd },
+      gatedCtx,
+    );
+    assert.ok(!grepGated.isError, textOf(grepGated).slice(0, 120));
+    assert.ok(!/│/.test(textOf(grepGated)), "vanilla grep has no anchor separator");
     // switching back to a non-gated model makes upstream re-register the
     // anchored flavor, and the anchored format returns for it
     await harness.emit("model_select", { model: { id: "normal-model" } }, makeCtx(cwd));
@@ -217,7 +225,8 @@ describe("every op reaches upstream", () => {
       op: "copy",
       source_from: srcRows[0].anchor,
       source_to: srcRows[1].anchor,
-      insert_after: dstRows[0].anchor,
+      anchor: dstRows[0].anchor,
+      direction: "after",
     });
     assert.ok(!copied.isError, textOf(copied));
     assert.equal(await fs.readFile(path.join(cwd, "dst.txt"), "utf8"), "x\none\ntwo\ny\n");
@@ -233,7 +242,8 @@ describe("every op reaches upstream", () => {
       op: "move",
       source_from: srcRows2[2].anchor,
       source_to: srcRows2[2].anchor,
-      insert_after: dstRows2[0].anchor,
+      anchor: dstRows2[0].anchor,
+      direction: "after",
     });
     assert.ok(!moved.isError, textOf(moved));
     assert.equal(await fs.readFile(path.join(cwd, "src.txt"), "utf8"), "one\ntwo\n");
@@ -248,20 +258,22 @@ describe("every op reaches upstream", () => {
     assert.equal(await fs.readFile(path.join(cwd, "dst.txt"), "utf8"), "x\none\ntwo\ny\n");
   });
 
-  it("anchor_grep searches with anchor rows when enabled", async () => {
+  it("grep searches with anchor rows when enabled", async () => {
     await updateConfig((c: any) => {
       c.anchorGrepEnabled = true;
     });
-    const harness = await setup(["bash", "edit", "read", "write", "grep", "find", "ls", "codemode"].filter((t) => t !== "grep"));
-    // built-in grep removed at session_start when anchor_grep is enabled
+    const harness = await setup(["bash", "edit", "read", "write", "grep", "find", "ls", "codemode"]);
+    // upstream's "grep" registration is captured, never forwarded, and the
+    // flushed list drops the name so pi's built-in grep does not compete
+    // with the hashline op
     assert.ok(!harness.getActiveTools().includes("grep"));
     await writeFile("g.txt", "keep\nTODO fix\nkeep\n");
 
-    const result = await harness.callTool("hashline", { op: "anchor_grep", pattern: "TODO" });
+    const result = await harness.callTool("hashline", { op: "grep", pattern: "TODO" });
     assert.ok(!result.isError, textOf(result));
     const text = textOf(result);
     assert.ok(text.includes("TODO fix"), text);
-    assert.ok(/│/.test(text), "hits carry anchor rows");
+    assert.ok(/:│/.test(text), "hits carry the lineNumber:│ anchor row format");
 
     await updateConfig((c: any) => {
       c.anchorGrepEnabled = false;
@@ -328,7 +340,7 @@ describe("help", () => {
     const unknown = await harness.callTool("hashline", { op: "help", about: "frobnicate" });
     assert.ok(unknown.isError);
     assert.match(textOf(unknown), /E_LEAN_HELP_ABOUT/);
-    for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"]) {
+    for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
       assert.ok(textOf(unknown).includes(name), `error lists ${name}`);
     }
   });
@@ -338,7 +350,7 @@ describe("help", () => {
     const result = await harness.callTool("hashline", { op: "help" });
     const text = textOf(result);
     assert.ok(!result.isError);
-    for (const name of ["replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"]) {
+    for (const name of ["replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
       assert.ok(text.includes(name), `lists ${name}`);
     }
   });
@@ -348,16 +360,17 @@ describe("fill-in canonicalization", () => {
   it("fixes unambiguous op spellings", () => {
     const cases: Array<[string, string, string[]]> = [
       ["ReplaceMatch", "replace_match", ["replace_match"]],
-      ["anchor grep", "anchor_grep", ["anchor_grep"]],
+      ["Grep", "grep", ["grep"]],
       ["UNDOLASTCHANGE", "undo_last_change", ["undo_last_change"]],
       ["`insert`", "insert", ["insert"]],
       ["hashline-move", "move", ["move"]],
       ["Insert-Match", "insert", []], // ambiguous? no: see below
     ];
     // last case is intentionally excluded below; run explicit ones here
-    const ops = ["replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change", "read", "replace", "help"];
+    const ops = ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "read", "replace", "help"];
     assert.equal(canonicalizeName("ReplaceMatch", ops), "replace_match");
-    assert.equal(canonicalizeName("anchor grep", ops), "anchor_grep");
+    assert.equal(canonicalizeName("Grep", ops), "grep");
+    assert.equal(canonicalizeName("anchor_grep", ops), "anchor_grep", "old name is no longer known");
     assert.equal(canonicalizeName("UNDOLASTCHANGE", ops), "undo_last_change");
     assert.equal(canonicalizeName("`insert`", ops), "insert");
     assert.equal(canonicalizeName("hashline-move", ops), "move");
@@ -366,7 +379,7 @@ describe("fill-in canonicalization", () => {
   });
 
   it("never guesses when ambiguous or unknown", () => {
-    const ops = ["replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change", "read", "replace", "help"];
+    const ops = ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "read", "replace", "help"];
     assert.equal(canonicalizeName("re", ops), "re", "too short to disambiguate");
     assert.equal(canonicalizeName("rep", ops), "rep", "matches replace and replace_match");
     assert.equal(canonicalizeName("frobnicate", ops), "frobnicate", "unknown stays unknown");
@@ -376,7 +389,7 @@ describe("fill-in canonicalization", () => {
   });
 
   it("prepareArguments leaves everything but op untouched (same reference)", () => {
-    const args = { op: "move", source_from: "aaaa", source_to: "bbbb", insert_after: "cccc" };
+    const args = { op: "move", source_from: "aaaa", source_to: "bbbb", anchor: "cccc", direction: "after" };
     assert.equal(canonicalizeHashlineArgs(args), args, "no copy when nothing changes");
     const fixed = canonicalizeHashlineArgs({ ...args, op: "Move" }) as any;
     assert.equal(fixed.op, "move");
@@ -416,6 +429,7 @@ describe("config-disabled ops", () => {
     await updateConfig((c: any) => {
       c.replaceMatchEnabled = false;
       c.copyMoveEnabled = false;
+      c.anchorGrepEnabled = false;
     });
     const harness = await setup();
 
@@ -439,15 +453,18 @@ describe("config-disabled ops", () => {
       op: "copy",
       source_from: "aaaa",
       source_to: "bbbb",
-      insert_after: "cccc",
+      anchor: "cccc",
+      direction: "after",
     });
     assert.ok(cp.isError);
     assert.match(textOf(cp), /E_LEAN_OP_DISABLED/);
 
-    // anchor_grep defaults to off
-    const grep = await harness.callTool("hashline", { op: "anchor_grep", pattern: "x" });
-    assert.ok(grep.isError);
-    assert.match(textOf(grep), /E_LEAN_OP_DISABLED/);
+    // grep never refuses: with anchorGrepEnabled off (or on gated models)
+    // upstream swaps in pi's vanilla grep under the same name
+    await writeFile("g2.txt", "needle\n");
+    const grep = await harness.callTool("hashline", { op: "grep", pattern: "needle", path: cwd });
+    assert.ok(!grep.isError, textOf(grep));
+    assert.ok(!/│/.test(textOf(grep)), "vanilla grep rows carry no anchors");
 
     // insert still works
     await writeFile("a.txt", "alpha\n");
@@ -464,6 +481,7 @@ describe("config-disabled ops", () => {
     await updateConfig((c: any) => {
       c.replaceMatchEnabled = true;
       c.copyMoveEnabled = true;
+      c.anchorGrepEnabled = true;
     });
   });
 });
@@ -486,11 +504,11 @@ describe("flag-aware prompt text", () => {
     });
   });
 
-  it("default mode tells the model not to pass path", async () => {
+  it("default mode makes `path` optional but ownership-checked", async () => {
     const harness = await setup();
     const replaceDef = harness.tools.get("replace");
     assert.ok(
-      (replaceDef.promptGuidelines ?? []).some((g: string) => g.includes("do not pass `path`")),
+      (replaceDef.promptGuidelines ?? []).some((g: string) => g.includes("`path` is optional but must match anchor ownership")),
     );
     assert.ok(!replaceDef.parameters.required?.includes("path"));
   });

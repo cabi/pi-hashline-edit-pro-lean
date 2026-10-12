@@ -21,13 +21,13 @@ export function buildPreferRule(flags: EditToolFlags): string {
   ops.push("insert");
   if (flags.copyMoveEnabled) ops.push("copy", "move");
   ops.push("undo_last_change");
-  return `Prefer the hashline tools for anything that touches files: \`read\`, \`replace\`, and \`hashline\` (ops: ${ops.join(", ")}).`;
+  return `Prefer the hashline tools for every file read and edit: \`read\`, \`replace\`, and \`hashline\` (ops: ${ops.join(", ")}).`;
 }
 
 /** Upstream batchGuideline (+ codemode suffix). Word "diff/result" by autoRead. */
 export function buildBatchRule(flags: EditToolFlags): string {
   const combined = flags.autoRead ? "diff" : "result";
-  let rule = `\`replace\`/\`hashline\` edit ops: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last applied call shows the combined ${combined}, with one undo for the whole batch. A call whose own request is invalid fails on its own; any failure once the batch runs aborts the whole batch.`;
+  let rule = `\`replace\`/\`hashline\` edit ops: same-file calls in one message commit as one batch; earlier calls reply \`In batch N (queued)\` and the last shows the combined ${combined}, and one undo reverts all. A request-invalid call (anchors, shape, or \`old_string\`) fails alone; a failure while the batch runs aborts it.`;
   if (flags.codemode) {
     rule +=
       " Calls from a codemode script apply immediately in order, and only the most recent edit per file is undoable.";
@@ -39,14 +39,14 @@ export function buildBatchRule(flags: EditToolFlags): string {
 export function buildPathRule(requirePath: boolean): string {
   return requirePath
     ? "Edit ops: pass `path` matching the file the anchors were served for; it is required and must match anchor ownership."
-    : "Edit ops: path resolution is anchor-only; do not pass `path`.";
+    : "Edit ops: anchors resolve the file; `path` is optional but must match anchor ownership when passed.";
 }
 
 export const VERBATIM_RULE =
-  "`replace`/`hashline` text fields: write the character itself, not an escape; the tool writes the text verbatim and never decodes escapes — `\\uXXXX` is the character, `\\\\uXXXX` the literal text.";
+  "`replace`/`hashline` text fields: `text` is written exactly as received; escapes are decoded once when the call is parsed, and the tool never decodes again — `\\uXXXX` is the character, `\\\\uXXXX` the literal text.";
 
 export const DIFF_RULE =
-  "Post-edit diff: `-anchor│` rows are dead anchors; `+anchor│` and ` anchor│` rows are live anchors for the next edit.";
+  "Post-edit diff: `-anchor│` rows are dead; `+anchor│` and ` anchor│` rows carry live anchors for the next edit.";
 
 export const STRICT_INPUT_RULE =
   "Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.";
@@ -140,18 +140,18 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   );
   if (flags.copyMoveEnabled) {
     bullets.push(
-      "- copy: duplicate the `source_from`..`source_to` lines after `insert_after`; the source stays in place and the copy is the content the source anchors were served from; anchors may resolve to another file, and an empty destination file is seeded",
-      "- move: relocate the `source_from`..`source_to` lines after `insert_after`, which must sit outside the range when both share a file; moving a range to where it already sits reports `No changes made`; a cross-file move records one undo entry per file",
+      "- copy: duplicate the `source_from`..`source_to` lines at the destination `anchor` with `direction` (the copy lands after/before it); the source stays in place and the copy is the content the source anchors were served from; the anchor may live in another file, and an empty destination file is seeded",
+      "- move: relocate the `source_from`..`source_to` lines to the destination `anchor` with `direction`, which must place the block outside the range when both share a file; moving a range to where it already sits reports `No changes made`; a cross-file move records one undo entry per file",
     );
   }
   bullets.push(
-    "- anchor_grep: ripgrep search whose hits come back as `lineNumber │ anchor│content` rows you can edit without a new `read`; respects `.gitignore`; when cut by match limit raise `limit`, when cut by rows/bytes refine `pattern`",
+    "- grep: ripgrep search whose hits come back as `lineNumber:│ anchor│content` rows you can edit without a new `read` (context rows are marked `lineNumber-│`); respects `.gitignore`; when cut by match limit raise `limit`, when cut by rows/bytes refine `pattern`",
     "- undo_last_change: revert a file's last edit (one slot per file, not a stack; refused if the file changed since — a file deleted since is restored; any `write` clears the slot; a cross-file move needs both sides undone)",
     "- read / replace: forward to the standalone tools of the same names",
     "- help: return the full upstream documentation and parameter list; set `about` to an op name",
   );
   const transferNote = flags.copyMoveEnabled
-    ? " For a block copy/move, only the source's two boundary rows and the destination line need serving; to append at the end, use the destination's last served line as `insert_after`."
+    ? " For a block copy/move, only the source's two boundary rows and the destination `anchor` line need serving; to append at the end, anchor that file's last served line with `direction: \"after\"`."
     : "";
   return [
     `Multi-op file-editing tool for the hashline toolset. Set \`op\` to the operation and pass that operation's parameters; all parameters are flat and optional except \`op\`. Anchors are the 4-character codes from \`anchor│content\` rows served by \`read\`.${transferNote}`,
@@ -162,15 +162,20 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
 export const LEAN_HASHLINE_SNIPPET = (() => {
   const ops: string[] = [];
   ops.push("replace_match");
-  ops.push("insert", "copy", "move", "anchor_grep", "undo_last_change", "help");
+  ops.push("insert", "copy", "move", "grep", "undo_last_change", "help");
   return `File-edit ops via \`op\`: ${ops.join(", ")}`;
 })();
 
 export function leanHashlineGuidelines(flags: EditToolFlags): string[] {
   const rules: string[] = [buildPreferRule(flags)];
   rules.push(
-    "`anchor_grep`: prefer it over shell `rg`/`grep` for searching so hits carry anchors and need no `read`; use `literal: true` when the pattern contains regex metacharacters.",
+    "`grep` op: prefer it over shell `rg`/`grep` for searching so hits carry anchors and need no `read`; use `literal: true` when the pattern contains regex metacharacters.",
   );
+  if (flags.replaceMatchEnabled) {
+    rules.push(
+      "`replace_match`: when you intend to change every matching line in a range, anchor the first and last matching lines of that range so one call replaces them all, instead of one call per line.",
+    );
+  }
   rules.push(...editCommonRules(flags));
   if (flags.codemode && flags.copyMoveEnabled) rules.push(CODEMODE_TRANSFER_RULE);
   rules.push(VERBATIM_RULE);
@@ -199,7 +204,7 @@ export const HASHLINE_SCHEMA = {
         "insert",
         "copy",
         "move",
-        "anchor_grep",
+        "grep",
         "undo_last_change",
         "read",
         "replace",
@@ -214,19 +219,18 @@ export const HASHLINE_SCHEMA = {
     replace_to: { type: "string" },
     old_string: { type: "string" },
     new_string: { type: "string" },
-    // insert
+    // insert / copy / move
     anchor: { type: "string" },
     direction: { type: "string", enum: ["after", "before"] },
     text: { type: "string" },
-    // copy / move
+    // copy / move (destination is `anchor` + `direction`)
     source_from: { type: "string" },
     source_to: { type: "string" },
-    insert_after: { type: "string" },
-    // read / anchor_grep / undo
+    // read / grep / undo
     path: { type: "string" },
     offset: { anyOf: [{ type: "integer", minimum: 1 }, { type: "string" }] },
     limit: { type: "integer", minimum: 1 },
-    // anchor_grep
+    // grep
     pattern: { type: "string" },
     glob: { type: "string" },
     ignoreCase: { type: "boolean" },

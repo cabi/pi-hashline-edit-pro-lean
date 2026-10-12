@@ -126,9 +126,13 @@ async function opUnavailableError(
     modelDisabled(ctx.model as ModelLike, config.disableOnModels)
   ) {
     // With readOnDisabledModels "vanilla" upstream swaps in a plain read
-    // tool under the same name; the captured definition already reflects
-    // that, so read stays available.
-    if (!(name === "read" && config.readOnDisabledModels === "vanilla")) {
+    // tool under the same name, and gated models always keep a plain grep
+    // under the name "grep"; the captured definitions already reflect those
+    // swaps, so both stay available.
+    if (
+      name !== "grep" &&
+      !(name === "read" && config.readOnDisabledModels === "vanilla")
+    ) {
       return `[E_LEAN_MODEL_GATED] This model matches the hashline disableOnModels setting, so the ${name} operation is unavailable here; use the built-in read/edit tools instead.`;
     }
   }
@@ -138,9 +142,9 @@ async function opUnavailableError(
   if ((name === "copy" || name === "move") && config.copyMoveEnabled === false) {
     return `[E_LEAN_OP_DISABLED] The ${name} op is turned off in the hashline config; enable it with /hashline-config.`;
   }
-  if (name === "anchor_grep" && config.anchorGrepEnabled !== true) {
-    return "[E_LEAN_OP_DISABLED] The anchor_grep op is turned off in the hashline config; enable it with /hashline-config or use shell search.";
-  }
+  // No grep branch: with anchorGrepEnabled === false, or on gated models,
+  // upstream swaps in pi's vanilla grep under the same "grep" name, so the op
+  // stays available in either flavor.
   return null;
 }
 
@@ -326,7 +330,7 @@ function buildLeanReplaceDef(): AnyToolDefinition {
 
 /** Union of the merged tools' captured outputSchemas (codemode structured output). */
 function mergedOutputSchema(): Record<string, unknown> | undefined {
-  const schemas = (["replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"] as const)
+  const schemas = (["replace_match", "insert", "copy", "move", "grep", "undo_last_change"] as const)
     .map((n) => latest.get(n)?.outputSchema)
     .filter((s): s is NonNullable<unknown> => Boolean(s));
   if (!schemas.length) return undefined;
@@ -406,7 +410,11 @@ export default function leanExtension(pi: ExtensionAPI): void {
     leanFlags = await currentEditFlags(codemodeActive);
     registerLeanTools(pi);
     if (shadowActive) {
-      pi.setActiveTools(shadowActive);
+      // Drop "grep" from the flushed list: upstream's grep registration is
+      // captured, never forwarded, so the name would resolve to pi's built-in
+      // vanilla grep and compete with the hashline `grep` op. The op itself
+      // forwards to the correct captured flavor (anchored or vanilla).
+      pi.setActiveTools(shadowActive.filter((n) => n !== "grep"));
     }
   });
 }

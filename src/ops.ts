@@ -15,7 +15,7 @@ export const UPSTREAM_TOOL_NAMES = [
   "insert",
   "copy",
   "move",
-  "anchor_grep",
+  "grep",
   "undo_last_change",
 ] as const;
 
