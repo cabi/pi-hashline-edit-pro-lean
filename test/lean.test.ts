@@ -523,6 +523,12 @@ describe("flag-aware prompt text", () => {
         g.includes("Strict-input mode is on"),
       ),
     );
+    assert.ok(
+      (harness.tools.get("hashline").promptGuidelines ?? []).some((g: string) =>
+        g.includes("covers the whole range or retypes unchanged text"),
+      ),
+      "strict-input rule covers the 6.4.2+ replace_match retype/whole-range rejection",
+    );
 
     await updateConfig((c: any) => {
       c.strictInput = false;
@@ -557,5 +563,28 @@ describe("flag-aware prompt text", () => {
   it("read description mentions the vanilla fallback for gated models", async () => {
     const harness = await setup();
     assert.ok(harness.tools.get("read").description.includes("without anchors"));
+  });
+  it("upstream 6.4.6 text contracts: anchor-limit wording, replace_match fragment rule", async () => {
+    const harness = await setup();
+    const readDesc = harness.tools.get("read").description;
+    assert.ok(
+      readDesc.includes("`limit` counts the lines returned starting at that anchor row"),
+      "anchor offset limit counts from the anchor row (inclusive)",
+    );
+    const hashDesc = harness.tools.get("hashline").description;
+    assert.ok(
+      hashDesc.includes("only the fragment that changes"),
+      "replace_match bullet carries the fragment-only contract",
+    );
+    assert.ok(
+      hashDesc.includes("use `replace` with the same anchors instead"),
+      "whole-line/whole-range changes are routed to replace",
+    );
+    assert.ok(
+      (harness.tools.get("hashline").promptGuidelines ?? []).some((g: string) =>
+        g.includes("Remember to use the hashline tools"),
+      ),
+      "preference rule mirrors upstream's 'Remember to use' wording",
+    );
   });
 });

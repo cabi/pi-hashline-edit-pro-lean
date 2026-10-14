@@ -2,10 +2,10 @@
   {
     "name": "read",
     "executionMode": "sequential",
-    "description": "Read a text file as `anchor│content` rows: a 4-character anchor (letters only, case-sensitive), `│`, then the line. Target edits by anchor, never by content or line number. `offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts lines after it — no line-number math. Page long files with `offset` and `limit`; when output says truncated, continue from the hinted `offset`. A stale anchor is refused with the current rows and fresh anchors. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can replace to seed content.",
+    "description": "Read a text file as `anchor│content` rows: a 4-character anchor (letters only, case-sensitive), `│`, then the line. Target edits by anchor, never by content or line number. `offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts lines from that anchor row onward — no line-number math. Page long files with `offset` and `limit`; when output says truncated, continue from the hinted `offset`. A stale anchor is refused with the current rows and fresh anchors. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can replace to seed content.",
     "promptSnippet": "Read a file; each line returned as anchor│content",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`read`: call again after an edit when you need anchors you lack — post-edit diff `+`/` ` rows and served `anchor│content` rows already carry fresh anchors for the changed range.",
       "`read`: `replace_match` needs both boundary lines served; copy `old_string` from a served row or read the lines first."
     ],
@@ -49,7 +49,7 @@
     "description": "Replace a range of lines (or a single line) in a text file by anchor: `remove_from` and `remove_to` are the 4-character anchors of its first and last line, `text` is the exact replacement text, and `replace_from`/`replace_to` are accepted as aliases. Deleting every line empties the file, and the result names the empty-line anchor, so a follow-up `replace` can seed content without a `read`.\n\nTo change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name.",
     "promptSnippet": "Replace lines by anchor: bare anchors in `remove_from`/`remove_to`, the exact replacement text in `text`",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`replace`: same-message calls must target disjoint ranges.",
       "`replace`: a pure deletion (`text: \"\"`) is the cheap way to clear a large range: it verifies only the first and last line against the served record and removes the interior as it currently stands.",
       "`replace`: for a single line, use the same anchor for `remove_from` and `remove_to`.",
@@ -89,12 +89,13 @@
   {
     "name": "replace_match",
     "executionMode": "sequential",
-    "description": "Replace part of a line (or a range of lines) without retyping the rest. `replace_from`/`replace_to` are bare anchors from served `anchor│content` rows marking the range's first and last line (the same anchor for one line), `old_string` is the text to find inside it, and `new_string` replaces every occurrence. `remove_from`/`remove_to` are accepted as aliases.\n\nThe two boundary anchors must still match what was last shown; lines strictly inside the range are matched against the file as it is on disk.",
+    "description": "Replace part of a line (or a range of lines) without retyping the rest. `replace_from`/`replace_to` are bare anchors from served `anchor│content` rows marking the range's first and last line (the same anchor for one line), and `old_string` is the exact text to find inside that range. Send only the fragment that changes — never text that `new_string` leaves unchanged. If `old_string` is everything on the line except indentation and trailing punctuation, that is a whole-line rewrite: use `replace` with the same anchors. The same short fragment on several lines (a value, a name) may be replaced in one call. `remove_from`/`remove_to` are accepted as aliases.\n\nThe two boundary anchors must still match what was last shown; lines strictly inside the range are matched against the file as it is on disk.",
     "promptSnippet": "Replace part of a line or range by anchor: every `old_string` occurrence inside `replace_from`/`replace_to` becomes `new_string`; the rest of the line stays untouched",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
-      "`replace_match`: `old_string` is usually a fragment of the line, not the whole line; every occurrence inside the range is replaced, so scope the range with anchors when only some occurrences should change.",
-      "`replace_match`: when you intend to change every matching line in a range, anchor the first and last matching lines of that range so one call replaces them all, instead of one call per line.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "`replace_match`: `old_string` is only the fragment that changes — never text that `new_string` leaves unchanged; every occurrence inside the range is replaced, so scope the range when only some lines should change.",
+      "`replace_match`: if `old_string` is everything on the line except indentation and trailing punctuation, that match is the whole line — use `replace`. A shorter fragment repeated on several lines (a value, a name) is the intended multi-line use.",
+      "`replace_match`: when the change covers whole lines or the whole range, use `replace` with the same anchors and the exact text.",
       "`replace`/`replace_match`/`insert`/`copy`/`move`: same-file calls in one message commit as one batch; earlier calls reply `In batch N (queued)`, the last shows the combined diff, and one undo reverts all. A request-invalid call (anchors, shape, or `old_string`) fails alone; a failure while the batch runs aborts it.",
       "`replace`/`replace_match`/`insert`/`copy`/`move`: anchors resolve the file; `path` is optional but must match anchor ownership when passed.",
       "`replace`/`replace_match`/`insert`/`copy`/`move`/`undo_last_change`: in the post-edit diff, `-anchor│` rows are dead anchors; `+anchor│` and ` anchor│` rows carry live anchors for the next edit.",
@@ -119,7 +120,7 @@
         },
         "old_string": {
           "type": "string",
-          "description": "The exact text to find inside the selected line(s), copied from the served row. Every occurrence inside the range is replaced; the text around each match is left untouched. Matching uses LF line breaks and excludes the last line's terminator."
+          "description": "The exact text to find inside the selected line(s), copied from the served row: only the fragment that changes, never text that `new_string` leaves unchanged. If `old_string` is everything on the line except indentation and trailing punctuation, that is a whole-line match: use `replace` instead. Every occurrence inside the range is replaced; the text around each match is left untouched. Matching uses LF line breaks and excludes the last line's terminator."
         },
         "new_string": {
           "type": "string",
@@ -139,7 +140,7 @@
     "description": "Insert text after or before one existing line, addressed by `anchor` (a bare anchor from any served `anchor│content` row). `direction` places `text` after or before the anchor line; `text` is the exact text to insert.",
     "promptSnippet": "Insert a text block after or before an anchor line: the anchor line stays; `text` is the exact text without anchor prefixes",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`insert`: a missing or extra `+anchor│` blank row at either block edge in the diff is the classic insert slip.",
       "`replace`/`replace_match`/`insert`/`copy`/`move`: same-file calls in one message commit as one batch; earlier calls reply `In batch N (queued)`, the last shows the combined diff, and one undo reverts all. A request-invalid call (anchors, shape, or `old_string`) fails alone; a failure while the batch runs aborts it.",
       "`replace`/`replace_match`/`insert`/`copy`/`move`: anchors resolve the file; `path` is optional but must match anchor ownership when passed.",
@@ -189,7 +190,7 @@
     "description": "Duplicate a range of lines at another anchor, in this or another file. The source rows and anchors stay live; the copied lines get fresh anchors in the destination's post-edit diff and keep their source line endings.\n\nA copy duplicates the content its source anchors were served from, so a same-message edit to the source file does not change what is copied.",
     "promptSnippet": "Copy lines to another position by anchor: `source_from`/`source_to` mark the range, `anchor` and `direction` the destination",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`copy`: the same anchor in `source_from` and `source_to` copies one line; copied lines get fresh anchors in the post-edit diff and the source rows keep theirs.",
       "`copy`/`move`: only the source's two boundary rows and the destination line need serving; to append to the end of a file, anchor that file's last line with `direction: \"after\"` — not a marker line and not the block's own end.",
       "`copy`/`move`: within one file the insertion point must fall before the source range's first line or after its last; anchoring the block's last line with `direction: \"after\"` (or its first line with `direction: \"before\"`) targets the gap right beside the block.",
@@ -247,7 +248,7 @@
     "description": "Relocate a range of lines to another anchor, in this or another file. Within one file the destination must sit outside the source range; moving a range onto itself reports `No changes made` and leaves the anchors alone.\n\nA cross-file move commits on its own when its source file also has batched edits in the message.",
     "promptSnippet": "Move lines to another position by anchor: `source_from`/`source_to` mark the range, `anchor` and `direction` the destination",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`move`: moving a range to where it already sits reports `No changes made` and leaves the anchors alone.",
       "`copy`/`move`: only the source's two boundary rows and the destination line need serving; to append to the end of a file, anchor that file's last line with `direction: \"after\"` — not a marker line and not the block's own end.",
       "`copy`/`move`: within one file the insertion point must fall before the source range's first line or after its last; anchoring the block's last line with `direction: \"after\"` (or its first line with `direction: \"before\"`) targets the gap right beside the block.",
@@ -305,7 +306,7 @@
     "description": "Search text files with ripgrep. Hits come back as `lineNumber:│ anchor│content` rows and context lines as `lineNumber-│ anchor│content`, editable with replace, insert, copy, or move without a new read; the `=== path ===` header and line numbers locate the match. Patterns are regex by default; set `literal: true` for exact text, `ignoreCase` for case-insensitive search, and `context` for surrounding rows. Rust regex syntax (no backreferences or look-around) through a linear-time engine. Searches respect `.gitignore`, always skip `.git`, and skip binary and image files silently. A match over 500 bytes is shown as a `...` fragment around the hit, but its anchor still covers the whole line. When cut by match limit, raise `limit` (default 100); when cut by rows/bytes, refine `pattern` or narrow `path`.",
     "promptSnippet": "Search with `lineNumber:│ anchor│content` hits (`lineNumber-│` for context) usable directly for `replace`/`insert`; use `literal`/`glob`/`context`",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`grep`: set `literal: true` when the pattern contains regex metacharacters.",
       "`grep`: `N:│` rows are matches and `N-│` rows are context;"
     ],
@@ -359,7 +360,7 @@
     "description": "Undo the last replace, replace_match, insert, copy, or move on a file, restoring the previous content, BOM, and line endings. If the file changed since that edit, the undo is refused and the file is left untouched; a file deleted since the edit is restored.",
     "promptSnippet": "Revert a file's most recent edit (single level)",
     "promptGuidelines": [
-      "Prefer the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
+      "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
       "`undo_last_change`: history is one slot per file, not a stack; a second undo returns `E_UNDO_NONE`.",
       "`undo_last_change`: a `write` clears the history, so undo before any other edit or write; the undo diff's `+anchor│` rows are the restored lines.",
       "`undo_last_change`: a cross-file `move` records one undo entry per file; undo both the source and the destination to revert the whole move, because undoing one side alone leaves the moved lines duplicated or missing."

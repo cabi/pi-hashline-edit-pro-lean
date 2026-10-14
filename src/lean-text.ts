@@ -21,7 +21,7 @@ export function buildPreferRule(flags: EditToolFlags): string {
   ops.push("insert");
   if (flags.copyMoveEnabled) ops.push("copy", "move");
   ops.push("undo_last_change");
-  return `Prefer the hashline tools for every file read and edit: \`read\`, \`replace\`, and \`hashline\` (ops: ${ops.join(", ")}).`;
+  return `Remember to use the hashline tools for every file read and edit: \`read\`, \`replace\`, and \`hashline\` (ops: ${ops.join(", ")}).`;
 }
 
 /** Upstream batchGuideline (+ codemode suffix). Word "diff/result" by autoRead. */
@@ -49,7 +49,7 @@ export const DIFF_RULE =
   "Post-edit diff: `-anchor│` rows are dead; `+anchor│` and ` anchor│` rows carry live anchors for the next edit.";
 
 export const STRICT_INPUT_RULE =
-  "Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.";
+  "Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings, and a `replace_match` `old_string` that covers the whole range or retypes unchanged text is rejected too.";
 
 export const CODEMODE_CONTRACT_RULE =
   'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
@@ -75,7 +75,7 @@ function editCommonRules(flags: EditToolFlags): string[] {
 export function leanReadDescription(): string {
   return [
     "Read a text file and return it as `anchor│content` rows: a 4-character anchor (letters only, case-sensitive), the `│` separator, then the line content. Address edits by anchor, not by line number or content.",
-    "`offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts lines to return after it. When the output says truncated, continue from the hinted `offset`. A stale anchor is refused with fresh context rows. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can edit to seed content.",
+    "`offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts the lines returned starting at that anchor row. When the output says truncated, continue from the hinted `offset`. A stale anchor is refused with fresh context rows. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can edit to seed content.",
     "If the output comes back without anchors, hashline editing is disabled for this model.",
   ].join("\n\n");
 }
@@ -132,7 +132,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   const bullets: string[] = [];
   if (flags.replaceMatchEnabled) {
     bullets.push(
-      "- replace_match: replace every occurrence of `old_string` with `new_string` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is matched as on disk; `remove_from`/`remove_to` are accepted as aliases)",
+      "- replace_match: replace every occurrence of `old_string` with `new_string` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is matched as on disk; `remove_from`/`remove_to` are accepted as aliases). Send `old_string` as only the fragment that changes — never text `new_string` leaves unchanged; when it covers a whole line or the whole range, use `replace` with the same anchors instead",
     );
   }
   bullets.push(
@@ -173,7 +173,7 @@ export function leanHashlineGuidelines(flags: EditToolFlags): string[] {
   );
   if (flags.replaceMatchEnabled) {
     rules.push(
-      "`replace_match`: when you intend to change every matching line in a range, anchor the first and last matching lines of that range so one call replaces them all, instead of one call per line.",
+      "`replace_match`: every occurrence inside the anchored range is replaced, so scope the range when only some matching lines should change, and cover all the lines you do want changed in one call instead of one call per line.",
     );
   }
   rules.push(...editCommonRules(flags));
