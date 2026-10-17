@@ -1,13 +1,14 @@
 /**
  * Lean prompt text for the three lean tools, assembled from upstream
- * semantics with flag awareness mirroring upstream's finalizePrompts
- * (see MAINTENANCE.md for the per-tool trim table).
+ * semantics with flag awareness mirroring upstream's prompt assembly in
+ * src/edit-common.ts (with*Prompts; since 6.4.7 the shared edit guidelines
+ * attach only via `replace` and pi's buildRules dedupe carries them —
+ * see MAINTENANCE.md for the per-tool trim table).
  *
  * Everything here is re-worded, not copied: one statement per rule, no
  * type/enum repetition (the schema carries that), no caps emphasis, no
  * usage thresholds the user should decide.
  */
-
 import type { EditToolFlags } from "pi-hashline-edit-pro/src/edit-common";
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,18 @@ export const STRICT_INPUT_RULE =
 export const CODEMODE_CONTRACT_RULE =
   'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
 
+/** Upstream editScriptGuideline (6.4.7): the chaining half lean keeps. */
+export const CODEMODE_EDIT_CHAIN_RULE =
+  "Codemode edit results carry `anchors[].anchor` to chain the next edit; read again when `anchorsOmitted` is true.";
+
+/** Upstream READ_SCRIPT_GUIDELINE (6.4.7). */
+export const CODEMODE_READ_RESULTS_RULE =
+  "`read` from a codemode script: `text` is the raw file content of the served window, `notices` the non-file notes, and `lines[].anchor` the editable anchor; an image read resolves to an image block.";
+
+/** Upstream GREP_SCRIPT_GUIDELINE (6.4.7). */
+export const CODEMODE_GREP_RESULTS_RULE =
+  "`grep` from a codemode script: `results[].lines[]` carry each hit's `anchor` and `text`, so a hit is editable without a fresh read.";
+
 export const CODEMODE_TRANSFER_RULE =
   "`copy`/`move` from a codemode script commit on their own and never join a batch; a script cross-file `move` shows both the source and destination diffs.";
 
@@ -63,7 +76,7 @@ function editCommonRules(flags: EditToolFlags): string[] {
     buildBatchRule(flags),
     buildPathRule(flags.requirePath),
   ];
-  if (flags.codemode) rules.push(CODEMODE_CONTRACT_RULE);
+  if (flags.codemode) rules.push(CODEMODE_CONTRACT_RULE, CODEMODE_EDIT_CHAIN_RULE);
   if (flags.autoRead) rules.push(DIFF_RULE);
   return rules;
 }
@@ -93,6 +106,7 @@ export function leanReadGuidelines(flags: EditToolFlags): string[] {
       "`hashline` op `replace_match` needs both boundary lines served: copy `old_string` from a served row or read the lines first.",
     );
   }
+  if (flags.codemode) rules.push(CODEMODE_READ_RESULTS_RULE);
   return rules;
 }
 
@@ -171,6 +185,7 @@ export function leanHashlineGuidelines(flags: EditToolFlags): string[] {
   rules.push(
     "`grep` op: prefer it over shell `rg`/`grep` for searching so hits carry anchors and need no `read`; use `literal: true` when the pattern contains regex metacharacters.",
   );
+  if (flags.codemode) rules.push(CODEMODE_GREP_RESULTS_RULE);
   if (flags.replaceMatchEnabled) {
     rules.push(
       "`replace_match`: every occurrence inside the anchored range is replaced, so scope the range when only some matching lines should change, and cover all the lines you do want changed in one call instead of one call per line.",
