@@ -21,7 +21,7 @@
     "measure": "tsx scripts/measure.ts"
   },
   "dependencies": {
-    "pi-hashline-edit-pro": "6.4.7"
+    "pi-hashline-edit-pro": "6.4.8"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.99.0",

@@ -59,9 +59,9 @@ export const CODEMODE_CONTRACT_RULE =
 export const CODEMODE_EDIT_CHAIN_RULE =
   "Codemode edit results carry `anchors[].anchor` to chain the next edit; read again when `anchorsOmitted` is true.";
 
-/** Upstream READ_SCRIPT_GUIDELINE (6.4.7). */
+/** Upstream READ_SCRIPT_GUIDELINE (6.4.8): codemode read resolves to plain text by default. */
 export const CODEMODE_READ_RESULTS_RULE =
-  "`read` from a codemode script: `text` is the raw file content of the served window, `notices` the non-file notes, and `lines[].anchor` the editable anchor; an image read resolves to an image block.";
+  "`read` from a codemode script resolves to the file's text, like the built-in `read`; pass `anchors: true` for `{ text, lines, notices }` with the raw served window and `lines[].anchor` for chained edits; an image read resolves to an image block.";
 
 /** Upstream GREP_SCRIPT_GUIDELINE (6.4.7). */
 export const CODEMODE_GREP_RESULTS_RULE =
@@ -245,6 +245,7 @@ export const HASHLINE_SCHEMA = {
     path: { type: "string" },
     offset: { anyOf: [{ type: "integer", minimum: 1 }, { type: "string" }] },
     limit: { type: "integer", minimum: 1 },
+    anchors: { type: "boolean" }, // read, codemode only: structured { text, lines, notices } instead of plain text
     // grep
     pattern: { type: "string" },
     glob: { type: "string" },

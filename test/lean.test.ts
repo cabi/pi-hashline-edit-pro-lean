@@ -305,6 +305,7 @@ describe("every op reaches upstream", () => {
     assert.ok(readDef.parameters.properties.offset, "offset kept");
     assert.ok(readDef.parameters.properties.offset.anyOf, "offset union kept");
     assert.equal(readDef.parameters.properties.path.description, undefined, "descriptions stripped");
+    assert.equal(readDef.parameters.properties.anchors, undefined, "no anchors param outside codemode");
     assert.ok(readDef.outputSchema, "outputSchema kept (free: not sent to the model)");
     assert.ok(typeof readDef.renderCall === "function");
     assert.ok(typeof readDef.renderResult === "function");
@@ -558,6 +559,16 @@ describe("flag-aware prompt text", () => {
       ),
       "standalone replace gets it too",
     );
+    // 6.4.8: codemode read resolves to plain text; `anchors: true` opts back
+    // into the structured result, and the captured read schema gains the param
+    assert.ok(
+      (harness.tools.get("read").promptGuidelines ?? []).some((g: string) =>
+        g.includes("pass `anchors: true`"),
+      ),
+      "codemode read-results rule present",
+    );
+    assert.equal(harness.tools.get("read").parameters.properties.anchors?.type, "boolean");
+    assert.ok(!harness.tools.get("read").parameters.properties.anchors?.description);
   });
 
   it("read description mentions the vanilla fallback for gated models", async () => {
