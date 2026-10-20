@@ -28,7 +28,7 @@ export function buildPreferRule(flags: EditToolFlags): string {
 /** Upstream batchGuideline (+ codemode suffix). Word "diff/result" by autoRead. */
 export function buildBatchRule(flags: EditToolFlags): string {
   const combined = flags.autoRead ? "diff" : "result";
-  let rule = `\`replace\`/\`hashline\` edit ops: same-file calls in one message commit as one batch; earlier calls reply \`In batch N (queued)\` and the last shows the combined ${combined}, and one undo reverts all. A request-invalid call (anchors, shape, or \`old_string\`) fails alone; a failure while the batch runs aborts it.`;
+  let rule = `\`replace\`/\`hashline\` edit ops: same-file calls in one message commit as one batch — send together the edits whose anchors you already have; an edit that needs anchors from a previous result waits for the next turn. Earlier calls reply \`In batch N (queued)\` and the last shows the combined ${combined}, and one undo reverts all. A request-invalid call (anchors, shape, or \`match\`) fails alone; a failure while the batch runs aborts it.`;
   if (flags.codemode) {
     rule +=
       " Calls from a codemode script apply immediately in order, and only the most recent edit per file is undoable.";
@@ -47,10 +47,10 @@ export const VERBATIM_RULE =
   "`replace`/`hashline` text fields: `text` is written exactly as received; escapes are decoded once when the call is parsed, and the tool never decodes again — `\\uXXXX` is the character, `\\\\uXXXX` the literal text.";
 
 export const DIFF_RULE =
-  "Post-edit diff: `-anchor│` rows are dead; `+anchor│` and ` anchor│` rows carry live anchors for the next edit.";
+  "Post-edit diff: `-anchor│` rows are dead; `+anchor│` and ` anchor│` rows carry live anchors for the next edit, and rows the diff does not show keep their anchors, so a follow-up edit on them needs no re-read.";
 
 export const STRICT_INPUT_RULE =
-  "Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings, and a `replace_match` `old_string` that covers the whole range or retypes unchanged text is rejected too.";
+  "Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.";
 
 export const CODEMODE_CONTRACT_RULE =
   'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
@@ -103,7 +103,7 @@ export function leanReadGuidelines(flags: EditToolFlags): string[] {
   );
   if (flags.replaceMatchEnabled) {
     rules.push(
-      "`hashline` op `replace_match` needs both boundary lines served: copy `old_string` from a served row or read the lines first.",
+      "`hashline` op `replace_match` needs both boundary lines served: copy `match` from a served row or read the lines first.",
     );
   }
   if (flags.codemode) rules.push(CODEMODE_READ_RESULTS_RULE);
@@ -146,7 +146,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   const bullets: string[] = [];
   if (flags.replaceMatchEnabled) {
     bullets.push(
-      "- replace_match: replace every occurrence of `old_string` with `new_string` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is matched as on disk; `remove_from`/`remove_to` are accepted as aliases). Send `old_string` as only the fragment that changes — never text `new_string` leaves unchanged; when it covers a whole line or the whole range, use `replace` with the same anchors instead",
+      "- replace_match: replace every occurrence of `match` with `replacement` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is searched as on disk; `remove_from`/`remove_to` are accepted as aliases). `match` and `replacement` each stay within one line — a single trailing line break is accepted (the line's own terminator for `match`, dropped for `replacement`), an interior one belongs to `replace`. Send `match` as only the fragment that changes — never text `replacement` leaves unchanged; narrow the anchors when only some occurrences should change, and when the change covers a whole line use `replace` with the same anchor",
     );
   }
   bullets.push(
@@ -155,7 +155,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   if (flags.copyMoveEnabled) {
     bullets.push(
       "- copy: duplicate the `source_from`..`source_to` lines at the destination `anchor` with `direction` (the copy lands after/before it); the source stays in place and the copy is the content the source anchors were served from; the anchor may live in another file, and an empty destination file is seeded",
-      "- move: relocate the `source_from`..`source_to` lines to the destination `anchor` with `direction`, which must place the block outside the range when both share a file; moving a range to where it already sits reports `No changes made`; a cross-file move records one undo entry per file",
+      "- move: relocate the `source_from`..`source_to` lines to the destination `anchor` with `direction`, which must place the block outside the range when both share a file; moving a range to where it already sits reports `No changes made`; rows between the source and the destination keep their content but may be re-anchored, so read that span again before editing it; a cross-file move records one undo entry per file",
     );
   }
   bullets.push(
@@ -165,7 +165,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
     "- help: return the full upstream documentation and parameter list; set `about` to an op name",
   );
   const transferNote = flags.copyMoveEnabled
-    ? " For a block copy/move, only the source's two boundary rows and the destination `anchor` line need serving; to append at the end, anchor that file's last served line with `direction: \"after\"`."
+    ? " For a block copy/move, only the source's two boundary rows and the destination `anchor` line need serving — grep the marker lines to serve them; to append at the end, anchor that file's last served line with `direction: \"after\"`."
     : "";
   return [
     `Multi-op file-editing tool for the hashline toolset. Set \`op\` to the operation and pass that operation's parameters; all parameters are flat and optional except \`op\`. Anchors are the 4-character codes from \`anchor│content\` rows served by \`read\`.${transferNote}`,
@@ -232,8 +232,9 @@ export const HASHLINE_SCHEMA = {
     remove_to: { type: "string" },
     replace_from: { type: "string" },
     replace_to: { type: "string" },
-    old_string: { type: "string" },
-    new_string: { type: "string" },
+    // replace_match (upstream 6.5.0 renamed old_string/new_string → match/replacement)
+    match: { type: "string" },
+    replacement: { type: "string" },
     // insert / copy / move
     anchor: { type: "string" },
     direction: { type: "string", enum: ["after", "before"] },

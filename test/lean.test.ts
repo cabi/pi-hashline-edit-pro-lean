@@ -203,11 +203,47 @@ describe("every op reaches upstream", () => {
       op: "replace_match",
       replace_from: rows[0].anchor,
       replace_to: rows[0].anchor,
-      old_string: "alp",
-      new_string: "ALP",
+      match: "alp",
+      replacement: "ALP",
     });
     assert.ok(!result.isError, textOf(result));
     assert.equal(await fs.readFile(path.join(cwd, "a.txt"), "utf8"), "ALPha\nbeta\n");
+  });
+
+  it("replace_match since 6.5.0 rejects old_string/new_string", async () => {
+    const harness = await setup();
+    await writeFile("a.txt", "alpha\nbeta\n");
+
+    const read1 = await harness.callTool("read", { path: path.join(cwd, "a.txt") });
+    const rows = anchorRows(textOf(read1));
+
+    const renamed = await harness.callTool("hashline", {
+      op: "replace_match",
+      replace_from: rows[0].anchor,
+      replace_to: rows[1].anchor,
+      old_string: "alp",
+      new_string: "ALP",
+    });
+    assert.ok(renamed.isError);
+    assert.match(textOf(renamed), /no longer accepts "old_string"\/"new_string"/);
+  });
+
+  it("replace_match since 6.5.0 rejects a multi-line match", async () => {
+    const harness = await setup();
+    await writeFile("a.txt", "alpha\nbeta\n");
+
+    const read1 = await harness.callTool("read", { path: path.join(cwd, "a.txt") });
+    const rows = anchorRows(textOf(read1));
+
+    const multiline = await harness.callTool("hashline", {
+      op: "replace_match",
+      replace_from: rows[0].anchor,
+      replace_to: rows[1].anchor,
+      match: "a\nb",
+      replacement: "x",
+    });
+    assert.ok(multiline.isError);
+    assert.match(textOf(multiline), /must stay within one line/);
   });
 
   it("copy duplicates lines into another file, move relocates them, undo reverts", async () => {
@@ -443,8 +479,8 @@ describe("config-disabled ops", () => {
       op: "replace_match",
       replace_from: "aaaa",
       replace_to: "aaaa",
-      old_string: "x",
-      new_string: "y",
+      match: "x",
+      replacement: "y",
     });
     assert.ok(rm.isError);
     assert.match(textOf(rm), /E_LEAN_OP_DISABLED/);
@@ -524,11 +560,12 @@ describe("flag-aware prompt text", () => {
         g.includes("Strict-input mode is on"),
       ),
     );
+    const strictRule = (harness.tools.get("hashline").promptGuidelines ?? []).find((g: string) =>
+      g.includes("Strict-input mode is on"),
+    );
     assert.ok(
-      (harness.tools.get("hashline").promptGuidelines ?? []).some((g: string) =>
-        g.includes("covers the whole range or retypes unchanged text"),
-      ),
-      "strict-input rule covers the 6.4.2+ replace_match retype/whole-range rejection",
+      strictRule !== undefined && !strictRule.includes("replace_match"),
+      "since upstream 6.5.0 strict-input no longer rejects replace_match retype/whole-range inputs",
     );
 
     await updateConfig((c: any) => {
@@ -575,7 +612,7 @@ describe("flag-aware prompt text", () => {
     const harness = await setup();
     assert.ok(harness.tools.get("read").description.includes("without anchors"));
   });
-  it("upstream 6.4.6 text contracts: anchor-limit wording, replace_match fragment rule", async () => {
+  it("upstream 6.5 text contracts: anchor-limit wording, replace_match match/replacement rule", async () => {
     const harness = await setup();
     const readDesc = harness.tools.get("read").description;
     assert.ok(
@@ -588,7 +625,11 @@ describe("flag-aware prompt text", () => {
       "replace_match bullet carries the fragment-only contract",
     );
     assert.ok(
-      hashDesc.includes("use `replace` with the same anchors instead"),
+      hashDesc.includes("`match` and `replacement` each stay within one line"),
+      "replace_match bullet carries the 6.5.0 single-line rule",
+    );
+    assert.ok(
+      hashDesc.includes("use `replace` with the same anchor"),
       "whole-line/whole-range changes are routed to replace",
     );
     assert.ok(

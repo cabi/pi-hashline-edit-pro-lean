@@ -1,6 +1,6 @@
 # pi-hashline-edit-pro-lean
 
-A token-lean front for [pi-hashline-edit-pro](https://github.com/YuGiMob/pi-hashline-edit-pro). **Based on pi-hashline-edit-pro by RimuruW and Yugimob** — every feature is theirs, unchanged and used as a pinned npm dependency (`pi-hashline-edit-pro@6.4.8`). This package only shortens the tool descriptions and schemas the model reads on every request. The original MIT license is kept (see `LICENSE`).
+A token-lean front for [pi-hashline-edit-pro](https://github.com/YuGiMob/pi-hashline-edit-pro). **Based on pi-hashline-edit-pro by RimuruW and Yugimob** — every feature is theirs, unchanged and used as a pinned npm dependency (`pi-hashline-edit-pro@6.5.1`). This package only shortens the tool descriptions and schemas the model reads on every request. The original MIT license is kept (see `LICENSE`).
 The lean-wrapper approach comes from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md) in [kunkun9527/my-lean-pi-setup](https://github.com/kunkun9527/my-lean-pi-setup) — the source of the idea, with the reasoning and side-by-side examples in the article [Cut 91% of your tool prompts: a practical guide for Pi Agent users and extension authors](https://dev.to/shengkai_su/cut-91-of-your-tool-prompts-a-practical-guide-for-pi-agent-users-and-extension-authors-4jo9).
 
 ## What changes for the model
@@ -24,13 +24,13 @@ Call arguments are forwarded verbatim to the matching upstream tool; the upstrea
 
 Measured on the real registered definitions (default config) with the same rendering pi uses per request — tool declarations (`{name, description, parameters}`), prompt snippets, and guidelines deduplicated across tools like pi's `buildRules` — using `js-tiktoken` (`o200k_base`). Re-run with `npm run measure`.
 
-| | upstream 6.4.8 | lean | saved |
+| | upstream 6.5.1 | lean | saved |
 |---|---|---|---|
 | active tools | 8 | 3 | 5 (62.5%) |
-| declarations | 2046 tokens | 1216 tokens | 830 tokens (40.6%) |
+| declarations | 2003 tokens | 1296 tokens | 707 tokens (35.3%) |
 | snippets | 73 tokens | 73 tokens | 0 |
-| guidelines | 25 rules / 1000 tokens | 10 rules / 460 tokens | 15 rules / 540 tokens (54.0%) |
-| **total per request** | **3293 tokens** | **1749 tokens** | **1544 tokens (46.9%)** |
+| guidelines | 25 rules / 1052 tokens | 10 rules / 506 tokens | 15 rules / 546 tokens (51.9%) |
+| **total per request** | **3293 tokens** | **1875 tokens** | **1418 tokens (43.1%)** |
 
 ## Use
 
@@ -74,7 +74,7 @@ Most upstream updates only change internal logic, so upgrading the dependency is
 
 ```sh
 npm install
-npm test        # 26 tests: op forwarding, help, fill-ins, frozen list, gates
+npm test        # 28 tests: op forwarding, help, fill-ins, frozen list, gates
 npm run typecheck
 npm run measure # refreshes the table above
 ```
