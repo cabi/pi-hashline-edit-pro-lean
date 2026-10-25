@@ -42,8 +42,8 @@ async function writeFile(name: string, content: string): Promise<string> {
 function anchorRows(text: string): Array<{ anchor: string; content: string }> {
   return text
     .split("\n")
-    .filter((l) => /^[a-zA-Z]{4}│/.test(l))
-    .map((l) => ({ anchor: l.slice(0, 4), content: l.slice(5) }));
+    .filter((l) => /^[a-z]{5}│/.test(l))
+    .map((l) => ({ anchor: l.slice(0, 5), content: l.slice(6) }));
 }
 
 function textOf(result: any): string {
@@ -612,7 +612,7 @@ describe("flag-aware prompt text", () => {
     const harness = await setup();
     assert.ok(harness.tools.get("read").description.includes("without anchors"));
   });
-  it("upstream 6.5 text contracts: anchor-limit wording, replace_match match/replacement rule", async () => {
+  it("upstream 7.0 text contracts: anchor-limit wording, replace_match match/replacement rule", async () => {
     const harness = await setup();
     const readDesc = harness.tools.get("read").description;
     assert.ok(
@@ -625,8 +625,9 @@ describe("flag-aware prompt text", () => {
       "replace_match bullet carries the fragment-only contract",
     );
     assert.ok(
-      hashDesc.includes("`match` and `replacement` each stay within one line"),
-      "replace_match bullet carries the 6.5.0 single-line rule",
+      hashDesc.includes("`match` stays within one line") &&
+        hashDesc.includes("`replacement` may span lines"),
+      "replace_match bullet carries the 7.0.0 multi-line replacement rule",
     );
     assert.ok(
       hashDesc.includes("use `replace` with the same anchor"),

@@ -2,7 +2,7 @@
   {
     "name": "read",
     "executionMode": "sequential",
-    "description": "Read a text file as `anchor│content` rows: a 4-character anchor (letters only, case-sensitive), `│`, then the line. Target edits by anchor, never by content or line number. `offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts lines from that anchor row onward — no line-number math. Page long files with `offset` and `limit`; when output says truncated, continue from the hinted `offset`. A stale anchor is refused with the current rows and fresh anchors. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can replace to seed content.",
+    "description": "Read a text file as `anchor│content` rows: a 5-character lowercase anchor (letters only), `│`, then the line. Target edits by anchor, never by content or line number. `offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts lines from that anchor row onward — no line-number math. Page long files with `offset` and `limit`; when output says truncated, continue from the hinted `offset`. A stale anchor is refused with the current rows and fresh anchors. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can replace to seed content.",
     "promptSnippet": "Read a file; each line returned as anchor│content",
     "promptGuidelines": [
       "Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.",
@@ -67,11 +67,11 @@
       "properties": {
         "remove_from": {
           "type": "string",
-          "description": "4-char anchor of the FIRST line to remove."
+          "description": "5-char anchor of the FIRST line to remove."
         },
         "remove_to": {
           "type": "string",
-          "description": "4-char anchor of the LAST line to remove."
+          "description": "5-char anchor of the LAST line to remove."
         },
         "text": {
           "type": "string",
@@ -88,11 +88,11 @@
   {
     "name": "replace_match",
     "executionMode": "sequential",
-    "description": "Replace part of a line — or the same fragment on several lines of a range — without retyping the rest. `match` is the exact text to find inside the anchored range, and `replacement` replaces every occurrence; the text around each match is left untouched. Send only the fragment that changes — never text that `replacement` leaves unchanged — and narrow `replace_from`/`replace_to` when only one occurrence should change. `match` only needs to be unique inside the anchored range, not file-wide. For a whole-line rewrite, use `replace` with the same anchors.\n\nThe two boundary anchors must still match what was last shown; lines strictly inside the range are searched as they are on disk.",
-    "promptSnippet": "Replace part of a line or range by anchor: every `match` occurrence inside the range becomes `replacement`; the rest of each line stays untouched",
+    "description": "Replace part of a line — or the same fragment on several lines of a range — without retyping the rest. `match` is the exact text to find inside the anchored range, and `replacement` replaces every occurrence; the text around each match is left untouched. `match` stays within one line, while `replacement` may span lines (a single trailing line break is its terminator); new lines inherit the file's line endings. Send only the fragment that changes — never text that `replacement` leaves unchanged — and narrow `replace_from`/`replace_to` when only one occurrence should change. For a whole-line rewrite, use `replace` with the same anchors.\n\nThe two boundary anchors must still match what was last shown; lines strictly inside the range are searched as they are on disk.",
+    "promptSnippet": "Replace part of a line or range by anchor: every `match` occurrence inside the range becomes `replacement` (which may span lines); the text around each match stays untouched",
     "promptGuidelines": [
       "`replace_match`: `match` is only the fragment that changes — never text that `replacement` leaves unchanged; every occurrence inside the range is replaced, so narrow the anchors when only some lines should change.",
-      "`replace_match`: the anchors bound the range searched, and `match`/`replacement` must each stay within one line — a trailing line break is the line's terminator, an interior one belongs to `replace`, and a lone break cannot be a `match`.",
+      "`replace_match`: the anchors bound the range searched; `match` must stay within one line, while `replacement` may span lines — a trailing line break is the line's terminator, interior breaks split the replacement into lines, and a lone break counts as empty.",
       "`replace_match`: when the change covers the whole line, use `replace` with the same anchor and the exact text."
     ],
     "parameters": {
@@ -106,11 +106,11 @@
       "properties": {
         "replace_from": {
           "type": "string",
-          "description": "4-char anchor of the FIRST line of the range searched."
+          "description": "5-char anchor of the FIRST line of the range searched."
         },
         "replace_to": {
           "type": "string",
-          "description": "4-char anchor of the LAST line of the range searched; same as `replace_from` for a single line."
+          "description": "5-char anchor of the LAST line of the range searched; same as `replace_from` for a single line."
         },
         "match": {
           "type": "string",
@@ -118,7 +118,7 @@
         },
         "replacement": {
           "type": "string",
-          "description": "The exact replacement for every matched occurrence within the range. \"\" deletes the matches. It must stay within one line: a single trailing line break is accepted and dropped (a value that is only a line break counts as \"\"), and a line break anywhere else is refused. The rest of each line is kept byte-for-byte."
+          "description": "The exact replacement for every matched occurrence within the range. \"\" deletes the matches. A single trailing line break is accepted and dropped (a value that is only a line break counts as \"\"); an interior or leading line break splits the replacement into lines, and new lines inherit the file's line endings. The text around each match is kept byte-for-byte."
         }
       },
       "additionalProperties": true
@@ -131,7 +131,7 @@
   {
     "name": "insert",
     "executionMode": "sequential",
-    "description": "Insert text next to an existing line without removing anything. The anchor line stays in place, and `anchor` is a bare 4-character anchor from any served `anchor│content` row.",
+    "description": "Insert text next to an existing line without removing anything. The anchor line stays in place, and `anchor` is a bare 5-character anchor from any served `anchor│content` row.",
     "promptSnippet": "Insert a text block after or before an anchor line: the anchor line stays; `text` is the exact text without anchor prefixes",
     "promptGuidelines": [
       "`insert`: a missing or extra `+anchor│` blank row at either block edge in the diff is the classic insert slip."
@@ -146,18 +146,13 @@
       "properties": {
         "anchor": {
           "type": "string",
-          "description": "4-char anchor of the line to insert next to."
+          "description": "5-char anchor of the line to insert next to."
         },
         "direction": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "after"
-            },
-            {
-              "type": "string",
-              "const": "before"
-            }
+          "type": "string",
+          "enum": [
+            "after",
+            "before"
           ],
           "description": "\"after\" or \"before\""
         },
@@ -179,7 +174,7 @@
     "description": "Duplicate a range of lines at another anchor. The source rows and anchors stay live; the copied lines get fresh anchors in the destination's post-edit diff and keep their source line endings.\n\nA copy duplicates the content its source anchors were served from, so a same-message edit to the source file does not change what is copied.",
     "promptSnippet": "Copy lines to another position by anchor: `source_from`/`source_to` mark the range, `anchor` and `direction` the destination",
     "promptGuidelines": [
-      "`copy`: the same anchor in `source_from` and `source_to` copies one line; copied lines get fresh anchors in the post-edit diff and the source rows keep theirs.",
+      "`copy`: the same anchor in `source_from` and `source_to` copies one line.",
       "`copy`/`move`: only the first and last marker rows and the destination line need anchors — grep the markers, the body is copied; to append to the end of a file, anchor that file's last line with `direction: \"after\"`.",
       "`copy`/`move`: within one file the insertion point must fall before the source range's first line or after its last; anchoring the block's last line with `direction: \"after\"` (or its first line with `direction: \"before\"`) targets the gap right beside the block.",
       "`copy`/`move`: `source_from` and `source_to` may live in a different file than `anchor`; an empty destination file is seeded with the copied or moved lines.",
@@ -196,26 +191,21 @@
       "properties": {
         "source_from": {
           "type": "string",
-          "description": "4-char anchor of the FIRST source line to copy."
+          "description": "5-char anchor of the FIRST source line."
         },
         "source_to": {
           "type": "string",
-          "description": "4-char anchor of the LAST source line to copy."
+          "description": "5-char anchor of the LAST source line."
         },
         "anchor": {
           "type": "string",
-          "description": "4-char anchor of the destination line; the block lands before or after it and it may live in another file."
+          "description": "5-char anchor of the destination line; the block lands before or after it and it may live in another file."
         },
         "direction": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "after"
-            },
-            {
-              "type": "string",
-              "const": "before"
-            }
+          "type": "string",
+          "enum": [
+            "after",
+            "before"
           ],
           "description": "\"after\" places the block below the anchor line, \"before\" above it"
         }
@@ -230,7 +220,7 @@
   {
     "name": "move",
     "executionMode": "sequential",
-    "description": "Relocate a range of lines to another anchor. Within one file the destination must sit outside the source range; moving a range onto itself reports `No changes made` and leaves the anchors alone. Rows between the source and the destination keep their content but may be re-anchored, so read that span again if you plan to edit it.\n\nA cross-file move commits on its own when its source file also has batched edits in the message.",
+    "description": "Relocate a range of lines to another anchor. Within one file the destination must sit outside the source range. Rows between the source and the destination keep their content but may be re-anchored, so read that span again if you plan to edit it.\n\nA cross-file move whose source file also gets other edits in the same message runs outside any batch: same-message edits to its destination file can then either abort or make the move fail, so send that move in a separate message.",
     "promptSnippet": "Move lines to another position by anchor: `source_from`/`source_to` mark the range, `anchor` and `direction` the destination",
     "promptGuidelines": [
       "`move`: moving a range to where it already sits reports `No changes made` and leaves the anchors alone.",
@@ -250,26 +240,21 @@
       "properties": {
         "source_from": {
           "type": "string",
-          "description": "4-char anchor of the FIRST source line to copy."
+          "description": "5-char anchor of the FIRST source line."
         },
         "source_to": {
           "type": "string",
-          "description": "4-char anchor of the LAST source line to copy."
+          "description": "5-char anchor of the LAST source line."
         },
         "anchor": {
           "type": "string",
-          "description": "4-char anchor of the destination line; the block lands before or after it and it may live in another file."
+          "description": "5-char anchor of the destination line; the block lands before or after it and it may live in another file."
         },
         "direction": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "after"
-            },
-            {
-              "type": "string",
-              "const": "before"
-            }
+          "type": "string",
+          "enum": [
+            "after",
+            "before"
           ],
           "description": "\"after\" places the block below the anchor line, \"before\" above it"
         }
@@ -287,8 +272,7 @@
     "description": "Search text files with ripgrep. Hits come back as `lineNumber:│ anchor│content` rows and context lines as `lineNumber-│ anchor│content`, editable with replace, insert, copy, or move without a new read. A row returned by `grep` is already a served row, so you do not need to `read` the file to edit that line. The `=== path ===` header and line numbers locate the match. Patterns use ripgrep's Rust regex syntax (no backreferences or look-around) through a linear-time engine. Searches respect `.gitignore`, always skip `.git`, and skip binary and image files silently. A match over 500 bytes is shown as a `...` fragment around the hit, but its anchor still covers the whole line. When output is cut by the match limit, raise `limit`; when cut by rows or bytes, refine `pattern` or narrow `path`.",
     "promptSnippet": "Search with `lineNumber:│ anchor│content` hits (`lineNumber-│` for context) usable directly for `replace`/`insert`; use `literal`/`glob`/`context`",
     "promptGuidelines": [
-      "`grep`: set `literal: true` when the pattern contains regex metacharacters.",
-      "`grep`: `N:│` rows are matches and `N-│` rows are context;"
+      "`grep`: set `literal: true` to match the text exactly, when characters such as `(`, `[`, `.`, or `*` in it must not act as regex."
     ],
     "parameters": {
       "type": "object",

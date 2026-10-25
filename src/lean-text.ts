@@ -87,7 +87,7 @@ function editCommonRules(flags: EditToolFlags): string[] {
 
 export function leanReadDescription(): string {
   return [
-    "Read a text file and return it as `anchor│content` rows: a 4-character anchor (letters only, case-sensitive), the `│` separator, then the line content. Address edits by anchor, not by line number or content.",
+    "Read a text file and return it as `anchor│content` rows: a 5-character lowercase anchor (letters only), the `│` separator, then the line content. Address edits by anchor, not by line number or content.",
     "`offset` takes a 1-indexed line number or a served anchor; with an anchor, `limit` counts the lines returned starting at that anchor row. When the output says truncated, continue from the hinted `offset`. A stale anchor is refused with fresh context rows. Images attach visually; binary, directory, and UTF-16/UTF-32 text are rejected; an empty file returns one empty row you can edit to seed content.",
     "If the output comes back without anchors, hashline editing is disabled for this model.",
   ].join("\n\n");
@@ -119,7 +119,7 @@ export function leanReplaceDescription(flags: EditToolFlags): string {
     ? " To change only part of a line without retyping the rest, use `hashline` op `replace_match`."
     : "";
   return [
-    `Replace a range of lines in a text file by anchor: \`remove_from\` and \`remove_to\` are the 4-character anchors of the first and last line to remove (\`replace_from\`/\`replace_to\` are accepted as aliases), and \`text\` is one string holding the exact replacement text, written exactly as given. For a single line use the same anchor twice; \`text: ""\` deletes the range.`,
+    `Replace a range of lines in a text file by anchor: \`remove_from\` and \`remove_to\` are the 5-character anchors of the first and last line to remove (\`replace_from\`/\`replace_to\` are accepted as aliases), and \`text\` is one string holding the exact replacement text, written exactly as given. For a single line use the same anchor twice; \`text: ""\` deletes the range.`,
     `Deleting every line empties the file, and the result names the new empty-line anchor, so a follow-up \`replace\` on it can seed content without a \`read\`.${matchHint}`,
   ].join("\n\n");
 }
@@ -146,7 +146,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   const bullets: string[] = [];
   if (flags.replaceMatchEnabled) {
     bullets.push(
-      "- replace_match: replace every occurrence of `match` with `replacement` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is searched as on disk; `remove_from`/`remove_to` are accepted as aliases). `match` and `replacement` each stay within one line — a single trailing line break is accepted (the line's own terminator for `match`, dropped for `replacement`), an interior one belongs to `replace`. Send `match` as only the fragment that changes — never text `replacement` leaves unchanged; narrow the anchors when only some occurrences should change, and when the change covers a whole line use `replace` with the same anchor",
+      "- replace_match: replace every occurrence of `match` with `replacement` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is searched as on disk; `remove_from`/`remove_to` are accepted as aliases). `match` stays within one line — a single trailing line break is accepted (the line's own terminator). `replacement` may span lines: a lone line break counts as `\"\"` (deletes the match), a leading or interior break splits into lines, and new lines inherit the file's line endings. Send `match` as only the fragment that changes — never text `replacement` leaves unchanged; narrow the anchors when only some occurrences should change, and when the change covers a whole line use `replace` with the same anchor",
     );
   }
   bullets.push(
@@ -155,7 +155,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   if (flags.copyMoveEnabled) {
     bullets.push(
       "- copy: duplicate the `source_from`..`source_to` lines at the destination `anchor` with `direction` (the copy lands after/before it); the source stays in place and the copy is the content the source anchors were served from; the anchor may live in another file, and an empty destination file is seeded",
-      "- move: relocate the `source_from`..`source_to` lines to the destination `anchor` with `direction`, which must place the block outside the range when both share a file; moving a range to where it already sits reports `No changes made`; rows between the source and the destination keep their content but may be re-anchored, so read that span again before editing it; a cross-file move records one undo entry per file",
+      "- move: relocate the `source_from`..`source_to` lines to the destination `anchor` with `direction`, which must place the block outside the range when both share a file; moving a range to where it already sits reports `No changes made`; rows between the source and the destination keep their content but may be re-anchored, so read that span again before editing it; a cross-file move records one undo entry per file, and when its source file also gets same-message edits it runs outside any batch — send it in a separate message",
     );
   }
   bullets.push(
@@ -168,7 +168,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
     ? " For a block copy/move, only the source's two boundary rows and the destination `anchor` line need serving — grep the marker lines to serve them; to append at the end, anchor that file's last served line with `direction: \"after\"`."
     : "";
   return [
-    `Multi-op file-editing tool for the hashline toolset. Set \`op\` to the operation and pass that operation's parameters; all parameters are flat and optional except \`op\`. Anchors are the 4-character codes from \`anchor│content\` rows served by \`read\`.${transferNote}`,
+    `Multi-op file-editing tool for the hashline toolset. Set \`op\` to the operation and pass that operation's parameters; all parameters are flat and optional except \`op\`. Anchors are the 5-character lowercase codes from \`anchor│content\` rows served by \`read\`.${transferNote}`,
     bullets.join("\n"),
   ].join("\n\n");
 }
