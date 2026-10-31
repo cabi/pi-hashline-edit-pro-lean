@@ -18,6 +18,7 @@ import type { EditToolFlags } from "pi-hashline-edit-pro/src/edit-common";
 /** Upstream preferenceGuideline, pointing at the lean tool set. */
 export function buildPreferRule(flags: EditToolFlags): string {
   const ops: string[] = [];
+  if (flags.outlineEnabled) ops.push("outline");
   if (flags.replaceMatchEnabled) ops.push("replace_match");
   ops.push("insert");
   if (flags.copyMoveEnabled) ops.push("copy", "move");
@@ -53,7 +54,7 @@ export const STRICT_INPUT_RULE =
   "Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.";
 
 export const CODEMODE_CONTRACT_RULE =
-  'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
+  'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`. Arguments that fail the tool\'s schema still throw before the tool runs.';
 
 /** Upstream editScriptGuideline (6.4.7): the chaining half lean keeps. */
 export const CODEMODE_EDIT_CHAIN_RULE =
@@ -67,6 +68,9 @@ export const CODEMODE_READ_RESULTS_RULE =
 export const CODEMODE_GREP_RESULTS_RULE =
   "`grep` from a codemode script: `results[].lines[]` carry each hit's `anchor` and `text`, so a hit is editable without a fresh read.";
 
+/** Mirrors upstream's outline codemode rule (7.1). */
+export const CODEMODE_OUTLINE_RESULTS_RULE =
+  "`outline` from a codemode script resolves to the served outline text (notices included); pass `anchors: true` for `{ text, lines, notices }` with editable anchors — a directory or glob returns `files: [{ path, lines, totalLines, truncated, complete }]` in place of `lines`.";
 export const CODEMODE_TRANSFER_RULE =
   "`copy`/`move` from a codemode script commit on their own and never join a batch; a script cross-file `move` shows both the source and destination diffs.";
 
@@ -144,6 +148,11 @@ export function leanReplaceGuidelines(flags: EditToolFlags): string[] {
 
 export function leanHashlineDescription(flags: EditToolFlags): string {
   const bullets: string[] = [];
+  if (flags.outlineEnabled) {
+    bullets.push(
+      "- outline: the symbols of a file, a directory, or a glob such as `src/**/*.ts` — a `=== path (language) — N lines ===` header per file, then one `anchor│content` row per symbol whose content is the first line of its declaration. A `[limit N]` line under a row is that symbol's span: `read` with `offset` at the row's anchor and `limit` N returns exactly that symbol; `[N nested]` marks children hidden by `depth` (default 2, max 10). Rows cover top-level declarations and the members of a type or module, never a declaration inside a function body; a directory or glob gives each supported file a share of the 400-row cap (`*` and `**` both cross folders), skips files over 200KB, and stops at 400,000 source lines. Unsupported or symbol-less files fall back to a head-and-tail preview with a note, and a row clipped with a trailing `...` is not served for editing — read that line first",
+    );
+  }
   if (flags.replaceMatchEnabled) {
     bullets.push(
       "- replace_match: replace every occurrence of `match` with `replacement` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is searched as on disk; `remove_from`/`remove_to` are accepted as aliases). `match` stays within one line — a single trailing line break is accepted (the line's own terminator). `replacement` may span lines: a lone line break counts as `\"\"` (deletes the match), a leading or interior break splits into lines, and new lines inherit the file's line endings. Send `match` as only the fragment that changes — never text `replacement` leaves unchanged; narrow the anchors when only some occurrences should change, and when the change covers a whole line use `replace` with the same anchor",
@@ -173,19 +182,26 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   ].join("\n\n");
 }
 
-export const LEAN_HASHLINE_SNIPPET = (() => {
+export function leanHashlineSnippet(flags: EditToolFlags): string {
   const ops: string[] = [];
+  if (flags.outlineEnabled) ops.push("outline");
   ops.push("replace_match");
   ops.push("insert", "copy", "move", "grep", "undo_last_change", "help");
   return `File-edit ops via \`op\`: ${ops.join(", ")}`;
-})();
+}
 
 export function leanHashlineGuidelines(flags: EditToolFlags): string[] {
   const rules: string[] = [buildPreferRule(flags)];
   rules.push(
     "`grep` op: prefer it over shell `rg`/`grep` for searching so hits carry anchors and need no `read`; use `literal: true` when the pattern contains regex metacharacters.",
   );
+  if (flags.outlineEnabled) {
+    rules.push(
+      "`outline`: before you `read` a large or unfamiliar file or module, outline it and read only the spans you need; a span starts at the declaration line — decorators above it sit outside it, so read the lines above before you delete or move a symbol.",
+    );
+  }
   if (flags.codemode) rules.push(CODEMODE_GREP_RESULTS_RULE);
+  if (flags.codemode && flags.outlineEnabled) rules.push(CODEMODE_OUTLINE_RESULTS_RULE);
   if (flags.replaceMatchEnabled) {
     rules.push(
       "`replace_match`: every occurrence inside the anchored range is replaced, so scope the range when only some matching lines should change, and cover all the lines you do want changed in one call instead of one call per line.",
@@ -222,6 +238,7 @@ export const HASHLINE_SCHEMA = {
         "grep",
         "undo_last_change",
         "read",
+        "outline",
         "replace",
         "help",
       ],
@@ -246,7 +263,9 @@ export const HASHLINE_SCHEMA = {
     path: { type: "string" },
     offset: { anyOf: [{ type: "integer", minimum: 1 }, { type: "string" }] },
     limit: { type: "integer", minimum: 1 },
-    anchors: { type: "boolean" }, // read, codemode only: structured { text, lines, notices } instead of plain text
+    anchors: { type: "boolean" }, // read/outline, codemode only: structured { text, lines, notices } instead of plain text
+    // outline
+    depth: { type: "integer", minimum: 0, maximum: 10 },
     // grep
     pattern: { type: "string" },
     glob: { type: "string" },

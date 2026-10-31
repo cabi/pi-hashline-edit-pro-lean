@@ -67,7 +67,7 @@ describe("registration and frozen tool list", () => {
   it("registers exactly the lean trio; upstream tools are captured, not registered", async () => {
     const harness = await setup();
     assert.deepEqual([...harness.tools.keys()].sort(), ["hashline", "read", "replace"]);
-    for (const name of ["insert", "copy", "move", "replace_match", "grep", "undo_last_change"]) {
+    for (const name of ["insert", "copy", "move", "replace_match", "grep", "undo_last_change", "outline"]) {
       assert.ok(!harness.tools.has(name), `upstream tool ${name} must not be registered directly`);
     }
     // upstream's commands and handlers still pass through
@@ -353,7 +353,35 @@ describe("every op reaches upstream", () => {
     const component = hashDef.renderCall({ op: "insert", anchor: "aaaa", text: "x" }, stubTheme, { state: {} });
     assert.ok(component !== undefined);
   });
+  it("outline (7.1, opt-in) serves symbol rows for a TS file", async () => {
+    await updateConfig((c: any) => {
+      c.outlineEnabled = true;
+    });
+    const harness = await setup();
+    const hashDef = harness.tools.get("hashline");
+    assert.ok(hashDef.description.includes("- outline:"), "enabled: outline bullet present");
+    assert.ok(hashDef.promptSnippet?.includes("outline"), "enabled: snippet lists outline");
+    const prefer = (hashDef.promptGuidelines ?? []).find((g: string) =>
+      g.includes("Remember to use the hashline tools"),
+    );
+    assert.ok(prefer !== undefined && prefer.includes("outline"), "prefer rule lists outline");
+    assert.equal(hashDef.parameters.properties.depth?.maximum, 10, "depth param with upstream max");
+
+    await writeFile("o.ts", "export function greet() {\n  return 1;\n}\n\nexport const x = 2;\n");
+    const result = await harness.callTool("hashline", { op: "outline", path: path.join(cwd, "o.ts") });
+    assert.ok(!result.isError, textOf(result).slice(0, 200));
+    const text = textOf(result);
+    assert.match(text, /o\.ts \(TypeScript\) — \d+ lines ===/);
+    assert.ok(text.includes("export function greet"), text);
+    assert.match(text, /\[limit \d+\]/, "rows carry their span");
+    assert.ok(anchorRows(text).length >= 2, "greet and x rows served");
+
+    await updateConfig((c: any) => {
+      c.outlineEnabled = false;
+    });
+  });
 });
+
 
 describe("help", () => {
   it("returns the full upstream description and parameters for an op", async () => {
@@ -377,7 +405,7 @@ describe("help", () => {
     const unknown = await harness.callTool("hashline", { op: "help", about: "frobnicate" });
     assert.ok(unknown.isError);
     assert.match(textOf(unknown), /E_LEAN_HELP_ABOUT/);
-    for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
+    for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change", "outline"]) {
       assert.ok(textOf(unknown).includes(name), `error lists ${name}`);
     }
   });
@@ -387,7 +415,7 @@ describe("help", () => {
     const result = await harness.callTool("hashline", { op: "help" });
     const text = textOf(result);
     assert.ok(!result.isError);
-    for (const name of ["replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
+    for (const name of ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "outline"]) {
       assert.ok(text.includes(name), `lists ${name}`);
     }
   });
@@ -404,7 +432,7 @@ describe("fill-in canonicalization", () => {
       ["Insert-Match", "insert", []], // ambiguous? no: see below
     ];
     // last case is intentionally excluded below; run explicit ones here
-    const ops = ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "read", "replace", "help"];
+    const ops = ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "read", "outline", "replace", "help"];
     assert.equal(canonicalizeName("ReplaceMatch", ops), "replace_match");
     assert.equal(canonicalizeName("Grep", ops), "grep");
     assert.equal(canonicalizeName("anchor_grep", ops), "anchor_grep", "old name is no longer known");
@@ -416,7 +444,7 @@ describe("fill-in canonicalization", () => {
   });
 
   it("never guesses when ambiguous or unknown", () => {
-    const ops = ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "read", "replace", "help"];
+    const ops = ["replace_match", "insert", "copy", "move", "grep", "undo_last_change", "read", "outline", "replace", "help"];
     assert.equal(canonicalizeName("re", ops), "re", "too short to disambiguate");
     assert.equal(canonicalizeName("rep", ops), "rep", "matches replace and replace_match");
     assert.equal(canonicalizeName("frobnicate", ops), "frobnicate", "unknown stays unknown");
@@ -521,6 +549,19 @@ describe("config-disabled ops", () => {
       c.anchorGrepEnabled = true;
     });
   });
+  it("outline (7.1) refuses with E_LEAN_OP_DISABLED until enabled", async () => {
+    const harness = await setup(["bash", "read", "replace", "hashline", "outline"]);
+    assert.ok(!harness.getActiveTools().includes("outline"), "flush drops outline from the active list");
+    const hashDef = harness.tools.get("hashline");
+    assert.ok(!hashDef.description.includes("- outline:"), "no outline bullet while off");
+    assert.ok(!hashDef.promptSnippet?.includes("outline"), "no outline in the snippet while off");
+
+    await writeFile("o.ts", "export const one = 1;\n");
+    const refused = await harness.callTool("hashline", { op: "outline", path: path.join(cwd, "o.ts") });
+    assert.ok(refused.isError);
+    assert.match(textOf(refused), /E_LEAN_OP_DISABLED/);
+    assert.match(textOf(refused), /\/hashline-config/);
+  });
 });
 
 describe("flag-aware prompt text", () => {
@@ -608,6 +649,30 @@ describe("flag-aware prompt text", () => {
     assert.ok(!harness.tools.get("read").parameters.properties.anchors?.description);
   });
 
+  it("codemode + outlineEnabled adds the outline results rule (7.1)", async () => {
+    await updateConfig((c: any) => {
+      c.outlineEnabled = true;
+    });
+    const loadout = ["bash", "edit", "read", "write", "grep", "find", "ls", "codemode"];
+    const harness = await setup(loadout);
+    assert.ok(
+      (harness.tools.get("hashline").promptGuidelines ?? []).some((g: string) =>
+        g.includes("`outline` from a codemode script"),
+      ),
+      "codemode outline rule present",
+    );
+
+    await updateConfig((c: any) => {
+      c.outlineEnabled = false;
+    });
+    const harness2 = await setup(loadout);
+    assert.ok(
+      !(harness2.tools.get("hashline").promptGuidelines ?? []).some((g: string) =>
+        g.includes("`outline` from a codemode script"),
+      ),
+      "rule gone while outline is off",
+    );
+  });
   it("read description mentions the vanilla fallback for gated models", async () => {
     const harness = await setup();
     assert.ok(harness.tools.get("read").description.includes("without anchors"));

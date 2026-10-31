@@ -44,6 +44,40 @@
     "hasPrepareArguments": true
   },
   {
+    "name": "outline",
+    "defaultActive": false,
+    "executionMode": "sequential",
+    "description": "Return the symbols of a file, a directory, or a glob such as `src/**/*.ts`: one `anchor│content` row per symbol, where the content is the real first line of that symbol's declaration. Use it before reading a large or unfamiliar file or module, then read only the spans you need.\n\nEach file starts with a `=== path (language) — N lines ===` header. A `[limit N]` line under a row is that symbol's span: `read` with `offset` set to the row's anchor and `limit` set to N returns exactly that symbol. A `[N nested]` line marks children hidden by `depth`. Output stops at 400 rows, and the footer says how to continue. A directory or glob covers supported files only, skips ignored folders, and gives each file a share of the rows; `*` and `**` both cross folders. Files over 200KB are skipped, and a batch stops once it has read 400,000 source lines to protect the session's anchors.\n\nSupported languages: JavaScript, TypeScript, JSX/TSX, Python, Go, Rust, Solidity, Java, PHP, Blade, SCSS, Sass, and Markdown. Any other file, or a file with no symbols, comes back as a head-and-tail preview with a note that says so; an empty file keeps only its empty-file note. A note also says when the parser could not read part of a file, since symbols there may be missing.\n\nA row is only the declaration line: read a symbol's span before you edit inside it. Rows cover top-level declarations and the members of a type or module; a declaration inside a function body is never a row, whatever `depth` you pass. Annotations, decorators, and attributes above a declaration are not shown and are outside its span. A row clipped with a trailing `...` is not served for editing, so read that line first.",
+    "promptSnippet": "Map the symbols of a file or folder before reading it: one anchored row per declaration, with the span to read",
+    "promptGuidelines": [
+      "`outline`: before you `read` a large or unfamiliar file or module, outline it and read only the spans you need.",
+      "`outline`: a span starts at the declaration line; read the lines above it before you delete or move a symbol, so its decorators go with it."
+    ],
+    "parameters": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File, directory, or glob (e.g. src/**/*.ts) to outline, relative to the working directory; files may also use absolute paths."
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Nesting depth to show: 0 lists top-level symbols only, 1 adds their members (default 2, maximum 10)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "hasRenderCall": true,
+    "hasRenderResult": true,
+    "hasOutputSchema": true,
+    "hasPrepareArguments": true
+  },
+  {
     "name": "replace",
     "executionMode": "sequential",
     "description": "Replace a range of lines (or a single line) in a text file by anchor. Deleting every line empties the file, and the result names the empty-line anchor, so a follow-up `replace` can seed content without a `read`.\n\nTo change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name.",

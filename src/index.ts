@@ -21,9 +21,11 @@
  * - everything else (event handlers, slash commands, write hook) passes
  *   through to the real pi object unchanged.
  *
- * The merged `hashline` tool carries the six remaining upstream tools as
- * ops plus `help`, which returns the full upstream documentation and
- * parameter schema for any op.
+ * The merged `hashline` tool carries the remaining upstream tools as ops
+ * plus `help`, which returns the full upstream documentation and parameter
+ * schema for any op. `outline` (added upstream 7.1) is opt-in: registered
+ * and captured unconditionally, but its op refuses with E_LEAN_OP_DISABLED
+ * until the config's Outline tool switch enables it.
  */
 
 import type {
@@ -52,7 +54,7 @@ import {
 } from "./ops.ts";
 import {
   HASHLINE_SCHEMA,
-  LEAN_HASHLINE_SNIPPET,
+  leanHashlineSnippet,
   LEAN_READ_SNIPPET,
   LEAN_REPLACE_SNIPPET,
   leanHashlineDescription,
@@ -141,6 +143,12 @@ async function opUnavailableError(
   }
   if ((name === "copy" || name === "move") && config.copyMoveEnabled === false) {
     return `[E_LEAN_OP_DISABLED] The ${name} op is turned off in the hashline config; enable it with /hashline-config.`;
+  }
+  if (name === "outline" && config.outlineEnabled !== true) {
+    // outline is opt-in: upstream registers the tool unconditionally but
+    // keeps it out of the active tools unless outlineEnabled, so the captured
+    // definition would still execute — gate it here.
+    return "[E_LEAN_OP_DISABLED] The outline op is turned off in the hashline config; enable it with /hashline-config.";
   }
   // No grep branch: with anchorGrepEnabled === false, or on gated models,
   // upstream swaps in pi's vanilla grep under the same "grep" name, so the op
@@ -330,7 +338,9 @@ function buildLeanReplaceDef(): AnyToolDefinition {
 
 /** Union of the merged tools' captured outputSchemas (codemode structured output). */
 function mergedOutputSchema(): Record<string, unknown> | undefined {
-  const schemas = (["replace_match", "insert", "copy", "move", "grep", "undo_last_change"] as const)
+  const schemas = (
+    ["replace_match", "insert", "copy", "move", "grep", "outline", "undo_last_change"] as const
+  )
     .map((n) => latest.get(n)?.outputSchema)
     .filter((s): s is NonNullable<unknown> => Boolean(s));
   if (!schemas.length) return undefined;
@@ -365,7 +375,7 @@ function buildLeanHashlineDef(): AnyToolDefinition {
     name: "hashline",
     label: "hashline",
     description: leanHashlineDescription(leanFlags),
-    promptSnippet: LEAN_HASHLINE_SNIPPET,
+    promptSnippet: leanHashlineSnippet(leanFlags),
     promptGuidelines: leanHashlineGuidelines(leanFlags),
     parameters: HASHLINE_SCHEMA as any,
     executionMode: "sequential",
@@ -414,7 +424,9 @@ export default function leanExtension(pi: ExtensionAPI): void {
       // captured, never forwarded, so the name would resolve to pi's built-in
       // vanilla grep and compete with the hashline `grep` op. The op itself
       // forwards to the correct captured flavor (anchored or vanilla).
-      pi.setActiveTools(shadowActive.filter((n) => n !== "grep"));
+      // (outline is likewise exposed as a hashline op, never a standalone
+      // tool, so its name is dropped with grep when Outline tool is on.)
+      pi.setActiveTools(shadowActive.filter((n) => n !== "grep" && n !== "outline"));
     }
   });
 }

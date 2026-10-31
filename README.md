@@ -1,36 +1,36 @@
 # pi-hashline-edit-pro-lean
 
-A token-lean front for [pi-hashline-edit-pro](https://github.com/YuGiMob/pi-hashline-edit-pro). **Based on pi-hashline-edit-pro by RimuruW and Yugimob** — every feature is theirs, unchanged and used as a pinned npm dependency (`pi-hashline-edit-pro@7.0.0`). This package only shortens the tool descriptions and schemas the model reads on every request. The original MIT license is kept (see `LICENSE`).
+A token-lean front for [pi-hashline-edit-pro](https://github.com/YuGiMob/pi-hashline-edit-pro). **Based on pi-hashline-edit-pro by RimuruW and Yugimob** — every feature is theirs, unchanged and used as a pinned npm dependency (`pi-hashline-edit-pro@7.1.1`). This package only shortens the tool descriptions and schemas the model reads on every request. The original MIT license is kept (see `LICENSE`).
 The lean-wrapper approach comes from [Make your own lean version](https://github.com/kunkun9527/my-lean-pi-setup/blob/main/docs/make-your-own-lean.md) in [kunkun9527/my-lean-pi-setup](https://github.com/kunkun9527/my-lean-pi-setup) — the source of the idea, with the reasoning and side-by-side examples in the article [Cut 91% of your tool prompts: a practical guide for Pi Agent users and extension authors](https://dev.to/shengkai_su/cut-91-of-your-tool-prompts-a-practical-guide-for-pi-agent-users-and-extension-authors-4jo9).
 
 ## What changes for the model
 
-Upstream registers 8 tools. Lean registers 3 and keeps all functionality:
+Upstream registers 9 tools (the ninth, `outline`, is opt-in and off by default — upstream's own default). Lean registers 3 and keeps all functionality:
 
 | Lean tool | Covers |
 |---|---|
 | `read` | upstream `read` (anchor-served file reading) |
 | `replace` | upstream `replace` (the hot path — same-file single-line edits) |
-| `hashline` | `replace_match`, `insert`, `copy`, `move`, `grep`, `undo_last_change` via an `op` parameter, plus `op: help` returning the full upstream documentation and parameter schema for any tool |
+| `hashline` | `replace_match`, `insert`, `copy`, `move`, `grep`, `undo_last_change`, and `outline` (opt-in: refuses with a clear error until `/hashline-config` enables it) via an `op` parameter, plus `op: help` returning the full upstream documentation and parameter schema for any tool |
 
 Call arguments are forwarded verbatim to the matching upstream tool; the upstream validation and behavior are untouched. Common mistakes are auto-corrected only when unambiguous: `op: "Insert"` / `"replace-match"` / `"Grep"` become `insert` / `replace_match` / `grep`; anything ambiguous (e.g. `"rep"`) is rejected by the schema's enum with the valid options listed. `op: "read"` and `op: "replace"` also forward to the standalone tools.
 
 ## What changes for the session
 
-- **The tool list never changes mid-session.** Upstream calls to `setActiveTools` (model gate, config-UI toggles) are captured in a shadow list; the real session list is flushed once at `session_start` with the tool set upstream wants there, minus the name `grep` — upstream's grep registration is captured like the rest, so the name would resolve to pi's built-in vanilla grep and compete with the hashline `grep` op. Ops disabled by config or by the model gate (`disableOnModels`) stay visible and return a clear error instead — see the deviation note in `MAINTENANCE.md`. The `grep` op never errors: when `anchorGrepEnabled` is off or the model is gated, upstream swaps in pi's vanilla grep under the same name and the op forwards to it.
+- **The tool list never changes mid-session.** Upstream calls to `setActiveTools` (model gate, config-UI toggles) are captured in a shadow list; the real session list is flushed once at `session_start` with the tool set upstream wants there, minus the names `grep` and `outline` — upstream's grep registration is captured like the rest, so the name would resolve to pi's built-in vanilla grep and compete with the hashline `grep` op, and upstream's outline registration is captured too, so the op always lives under `hashline` (it stays out of the session's tool list and returns a clear error while the config switch is off). Ops disabled by config or by the model gate (`disableOnModels`) stay visible and return a clear error instead — see the deviation note in `MAINTENANCE.md`. The `grep` op never errors: when `anchorGrepEnabled` is off or the model is gated, upstream swaps in pi's vanilla grep under the same name and the op forwards to it.
 - Config flags still shape the lean texts at session start (`requirePath`, `strictInput`, codemode contract, auto-read diffs), and mid-session config changes still take effect for execution on the next call.
 
 ## Token cost
 
 Measured on the real registered definitions (default config) with the same rendering pi uses per request — tool declarations (`{name, description, parameters}`), prompt snippets, and guidelines deduplicated across tools like pi's `buildRules` — using `js-tiktoken` (`o200k_base`). Re-run with `npm run measure`.
 
-| | upstream 7.0.0 | lean | saved |
+| | upstream 7.1.1 | lean | saved |
 |---|---|---|---|
 | active tools | 8 | 3 | 5 (62.5%) |
-| declarations | 1995 tokens | 1338 tokens | 657 tokens (32.9%) |
+| declarations | 1995 tokens | 1354 tokens | 641 tokens (32.1%) |
 | snippets | 73 tokens | 73 tokens | 0 |
 | guidelines | 24 rules / 1033 tokens | 10 rules / 506 tokens | 14 rules / 527 tokens (51.0%) |
-| **total per request** | **3272 tokens** | **1917 tokens** | **1355 tokens (41.4%)** |
+| **total per request** | **3272 tokens** | **1933 tokens** | **1339 tokens (40.9%)** |
 
 ## Use
 
@@ -74,7 +74,7 @@ Most upstream updates only change internal logic, so upgrading the dependency is
 
 ```sh
 npm install
-npm test        # 28 tests: op forwarding, help, fill-ins, frozen list, gates
+npm test        # 31 tests: op forwarding, outline gating, help, fill-ins, frozen list, gates
 npm run typecheck
 npm run measure # refreshes the table above
 ```

@@ -10,6 +10,7 @@
 
 export const UPSTREAM_TOOL_NAMES = [
   "read",
+  "outline",
   "replace",
   "replace_match",
   "insert",
