@@ -400,6 +400,15 @@ function registerLeanTools(pi: ExtensionAPI): void {
 // ---------------------------------------------------------------------------
 
 export default function leanExtension(pi: ExtensionAPI): void {
+  if (realPi !== null && realPi !== pi) {
+    // A different session is binding this module instance (for example an
+    // in-process subagent created after the main session). Drop the shadow
+    // captured from the previous session so the session_start flush cannot
+    // write the previous session's active-tool list into this session.
+    // Upstream re-captures a fresh list if it recomputes one; until then the
+    // flush stays a no-op and this session keeps its own active tools.
+    shadowActive = null;
+  }
   realPi = pi;
   const upstreamPi = makeUpstreamPi(pi);
 
