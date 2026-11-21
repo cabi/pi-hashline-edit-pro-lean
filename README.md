@@ -65,7 +65,7 @@ Sync pi-hashline-edit-pro-lean to the latest version of upstream pi-hashline-edi
 3. If only the version number changed and the code didn't, just upgrade the dependency.
 4. For new parameters or tools, add them to the lean version using the same trimming rules: common ones go in the schema, rare ones go in help. If upstream changed behavior, update the descriptions so they still match what the tool does.
 5. Run the tests, re-measure the tokens, and update the README and MAINTENANCE.md.
-6. Summarize the changes for me, and only publish after I confirm.
+6. Summarize the changes for me, and only publish after I confirm. Publishing is GitHub-only (commit + tag + release) — never `npm publish`.
 ```
 
 Most upstream updates only change internal logic, so upgrading the dependency is all it takes. When the adapter does need changes, it's usually because upstream renamed a tool or changed parameters.

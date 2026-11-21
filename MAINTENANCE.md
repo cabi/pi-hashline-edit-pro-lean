@@ -42,4 +42,5 @@ Upstream originals are captured in `upstream-inventory.json` (regenerate with `n
 4. Update `src/lean-text.ts` and the schema union in `src/lean-text.ts`/`src/ops.ts` if upstream renamed fields, changed call-affecting rules, or added/removed tools. Keep the trimming rules from the lean spec (each thing once; no restating what the schema says; keep call-affecting rules).
 5. `npm test` — the per-op forwarding, gated-model, and frozen-list tests fail loudly if registration or event flow changed.
 6. `npm run measure` and update the table in `README.md`.
-7. Update the version above and the trim notes in this file.
+7. Publishing, only after the user confirms — **GitHub only, never `npm publish`**: commit the sync as `Sync to pi-hashline-edit-pro X.Y.Z` with the lean version bump included (out-of-band fixes instead get a separate `chore(release): vX.Y.Z` commit), create a lightweight tag `v<lean-version>`, push `main` + the tag, then `gh release create` titled `v<lean> — upstream <upstream>` (fix-only tags skip the GitHub release, like v0.7.1). `npm publish` is forbidden for this package — do not run it and do not suggest it.
+8. Update the version above and the trim notes in this file.
