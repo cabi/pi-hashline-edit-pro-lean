@@ -194,7 +194,9 @@ describe("every op reaches upstream", () => {
 
   it("replace_match replaces a substring inside an anchor range", async () => {
     const harness = await setup();
-    await writeFile("a.txt", "alpha\nbeta\n");
+    await writeFile("a.txt", "alpha beta\n");
+    // (a bare `alpha\n` with match "alp" is embedded in the identifier and
+    // refused since 7.2.0 — see the isolation test below)
 
     const read1 = await harness.callTool("read", { path: path.join(cwd, "a.txt") });
     const rows = anchorRows(textOf(read1));
@@ -203,11 +205,11 @@ describe("every op reaches upstream", () => {
       op: "replace_match",
       replace_from: rows[0].anchor,
       replace_to: rows[0].anchor,
-      match: "alp",
-      replacement: "ALP",
+      match: "alpha",
+      replacement: "ALPHA",
     });
     assert.ok(!result.isError, textOf(result));
-    assert.equal(await fs.readFile(path.join(cwd, "a.txt"), "utf8"), "ALPha\nbeta\n");
+    assert.equal(await fs.readFile(path.join(cwd, "a.txt"), "utf8"), "ALPHA beta\n");
   });
 
   it("replace_match since 6.5.0 rejects old_string/new_string", async () => {
@@ -244,6 +246,38 @@ describe("every op reaches upstream", () => {
     });
     assert.ok(multiline.isError);
     assert.match(textOf(multiline), /must stay within one line/);
+  });
+
+  it("replace_match since 7.2.0 refuses an embedded match; allowEmbeddedMatch bypasses", async () => {
+    const harness = await setup();
+    await writeFile("a.txt", "createContext\nbeta\n");
+
+    const read1 = await harness.callTool("read", { path: path.join(cwd, "a.txt") });
+    const rows = anchorRows(textOf(read1));
+
+    const embedded = await harness.callTool("hashline", {
+      op: "replace_match",
+      replace_from: rows[0].anchor,
+      replace_to: rows[0].anchor,
+      match: "Context",
+      replacement: "State",
+    });
+    assert.ok(embedded.isError);
+    assert.match(textOf(embedded), /E_MATCH_NOT_ISOLATED/);
+    assert.match(textOf(embedded), /createContext/);
+    // nothing was written
+    assert.equal(await fs.readFile(path.join(cwd, "a.txt"), "utf8"), "createContext\nbeta\n");
+
+    const forced = await harness.callTool("hashline", {
+      op: "replace_match",
+      replace_from: rows[0].anchor,
+      replace_to: rows[0].anchor,
+      match: "Context",
+      replacement: "State",
+      allowEmbeddedMatch: true,
+    });
+    assert.ok(!forced.isError, textOf(forced));
+    assert.equal(await fs.readFile(path.join(cwd, "a.txt"), "utf8"), "createState\nbeta\n");
   });
 
   it("copy duplicates lines into another file, move relocates them, undo reverts", async () => {

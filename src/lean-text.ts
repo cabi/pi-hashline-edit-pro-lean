@@ -155,7 +155,7 @@ export function leanHashlineDescription(flags: EditToolFlags): string {
   }
   if (flags.replaceMatchEnabled) {
     bullets.push(
-      "- replace_match: replace every occurrence of `match` with `replacement` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is searched as on disk; `remove_from`/`remove_to` are accepted as aliases). `match` stays within one line — a single trailing line break is accepted (the line's own terminator). `replacement` may span lines: a lone line break counts as `\"\"` (deletes the match), a leading or interior break splits into lines, and new lines inherit the file's line endings. Send `match` as only the fragment that changes — never text `replacement` leaves unchanged; narrow the anchors when only some occurrences should change, and when the change covers a whole line use `replace` with the same anchor",
+      "- replace_match: replace every occurrence of `match` with `replacement` inside the `replace_from`..`replace_to` anchor range (same anchor for one line; the two boundary lines must still match what was served, the interior is searched as on disk; `remove_from`/`remove_to` are accepted as aliases). `match` must be isolated: each edge sits at a line edge or next to a character that cannot continue an identifier (letters, digits, `$`, `_`, and Unicode identifier characters all continue one), and an occurrence embedded in a larger identifier is refused with `[E_MATCH_NOT_ISOLATED]` before anything is written — put the whole identifier in `match` or pass `allowEmbeddedMatch: true` to replace inside one on purpose. `match` stays within one line — a single trailing line break is accepted (the line's own terminator). `replacement` may span lines: a lone line break counts as `\"\"` (deletes the match), a leading or interior break splits into lines, and new lines inherit the file's line endings. Send `match` as only the fragment that changes — never text `replacement` leaves unchanged; narrow the anchors when only some occurrences should change, and when the change covers a whole line use `replace` with the same anchor",
     );
   }
   bullets.push(
@@ -252,6 +252,8 @@ export const HASHLINE_SCHEMA = {
     // replace_match (upstream 6.5.0 renamed old_string/new_string → match/replacement)
     match: { type: "string" },
     replacement: { type: "string" },
+    // replace_match (upstream 7.2.0: opts out of the match-isolation guard)
+    allowEmbeddedMatch: { type: "boolean" },
     // insert / copy / move
     anchor: { type: "string" },
     direction: { type: "string", enum: ["after", "before"] },

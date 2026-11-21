@@ -122,12 +122,13 @@
   {
     "name": "replace_match",
     "executionMode": "sequential",
-    "description": "Replace part of a line — or the same fragment on several lines of a range — without retyping the rest. `match` is the exact text to find inside the anchored range, and `replacement` replaces every occurrence; the text around each match is left untouched. `match` stays within one line, while `replacement` may span lines (a single trailing line break is its terminator); new lines inherit the file's line endings. Send only the fragment that changes — never text that `replacement` leaves unchanged — and narrow `replace_from`/`replace_to` when only one occurrence should change. For a whole-line rewrite, use `replace` with the same anchors.\n\nThe two boundary anchors must still match what was last shown; lines strictly inside the range are searched as they are on disk.",
-    "promptSnippet": "Replace part of a line or range by anchor: every `match` occurrence inside the range becomes `replacement` (which may span lines); the text around each match stays untouched",
+    "description": "Replace part of a line — or the same fragment on several lines of a range — without retyping the rest. `match` is the exact text to find inside the anchored range, and `replacement` replaces every occurrence; the text around each match is left untouched. An occurrence embedded in a larger identifier is refused with `[E_MATCH_NOT_ISOLATED]` before anything is written: each edge of `match` must sit at a line edge or next to a character that cannot continue an identifier, and letters, digits, `$`, `_`, and Unicode identifier characters all continue one. Pass `allowEmbeddedMatch: true` when replacing a fragment inside an identifier is intended. `match` stays within one line, while `replacement` may span lines (a single trailing line break is its terminator); new lines inherit the file's line endings. Send only the fragment that changes — never text that `replacement` leaves unchanged — and narrow `replace_from`/`replace_to` when only one occurrence should change. For a whole-line rewrite, use `replace` with the same anchors.\n\nThe two boundary anchors must still match what was last shown; lines strictly inside the range are searched as they are on disk.",
+    "promptSnippet": "Replace part of a line or range by anchor: every `match` occurrence inside the range becomes `replacement` (which may span lines), the text around each match stays untouched, and a match glued to an identifier character is refused unless `allowEmbeddedMatch` is true",
     "promptGuidelines": [
       "`replace_match`: `match` is only the fragment that changes — never text that `replacement` leaves unchanged; every occurrence inside the range is replaced, so narrow the anchors when only some lines should change.",
       "`replace_match`: the anchors bound the range searched; `match` must stay within one line, while `replacement` may span lines — a trailing line break is the line's terminator, interior breaks split the replacement into lines, and a lone break counts as empty.",
-      "`replace_match`: when the change covers the whole line, use `replace` with the same anchor and the exact text."
+      "`replace_match`: when the change covers the whole line, use `replace` with the same anchor and the exact text.",
+      "`replace_match`: `match` must be isolated: an occurrence whose edge touches an identifier character (letters, digits, `$`, `_`, Unicode) is refused with `[E_MATCH_NOT_ISOLATED]` and nothing is written, so include the whole identifier in `match`, narrow the anchors, or pass `allowEmbeddedMatch: true` to replace inside an identifier on purpose."
     ],
     "parameters": {
       "type": "object",
@@ -148,11 +149,15 @@
         },
         "match": {
           "type": "string",
-          "description": "The exact text to find inside the selected lines, copied from the served row: only the fragment that changes, never text that `replacement` leaves unchanged. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched."
+          "description": "The exact text to find inside the selected lines, copied from the served row: only the fragment that changes, never text that `replacement` leaves unchanged. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched. An occurrence whose edge touches an identifier character (letters, digits, \"$\", \"_\", and Unicode identifier characters) is refused with [E_MATCH_NOT_ISOLATED] unless `allowEmbeddedMatch` is true."
         },
         "replacement": {
           "type": "string",
           "description": "The exact replacement for every matched occurrence within the range. \"\" deletes the matches. A single trailing line break is accepted and dropped (a value that is only a line break counts as \"\"); an interior or leading line break splits the replacement into lines, and new lines inherit the file's line endings. The text around each match is kept byte-for-byte."
+        },
+        "allowEmbeddedMatch": {
+          "type": "boolean",
+          "description": "Replace inside a larger identifier too. By default an occurrence glued to an identifier character is refused with [E_MATCH_NOT_ISOLATED] before anything is written; set this to true when replacing a fragment inside an identifier is intended."
         }
       },
       "additionalProperties": true
